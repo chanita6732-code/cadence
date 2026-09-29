@@ -1,0 +1,115 @@
+rules_version = '2';
+
+// =========================================================
+// Cadence — Firestore security rules
+// Publish in: Firebase Console → Firestore Database → Rules → paste → Publish
+//
+// Data layout (everything lives under the signed-in user's own document):
+//   users/{uid}                          profile + preferences
+//   users/{uid}/habits/{habitId}         habits   (soft-deleted with deleted = true)
+//   users/{uid}/goals/{goalId}           goals    (soft-deleted with deleted = true)
+//   users/{uid}/logs/{habitId}_{date}    check-ins (status null = cleared)
+//
+// A user can only ever read or write under their own uid. Every write is
+// validated here too, mirroring the checks in script.js (defence in depth).
+// =========================================================
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+    function isDate(v) {
+      return v is string && v.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$') && v >= '2000-01-01' && v <= '2100-12-31';
+    }
+    function isText(v, max) {
+      return v is string && v.size() <= max;
+    }
+    function isId(v) {
+      return v is string && v.matches('^[A-Za-z0-9-]{1,64}$');
+    }
+    function intIn(v, lo, hi) {
+      return v is int && v >= lo && v <= hi;
+    }
+    // updatedAt must be the server's clock, so sync cursors can't be forged
+    function stamped(d) {
+      return d.updatedAt == request.time;
+    }
+
+    function validProfile(d) {
+      return d.keys().hasOnly(['name', 'weekStart', 'streakThreshold', 'updatedAt'])
+        && d.keys().hasAll(['name', 'weekStart', 'streakThreshold', 'updatedAt'])
+        && isText(d.name, 40)
+        && d.weekStart in [0, 1]
+        && intIn(d.streakThreshold, 1, 100)
+        && stamped(d);
+    }
+
+    function validHabit(d) {
+      return d.keys().hasOnly(['name', 'description', 'icon', 'color', 'days', 'weeklyTarget', 'startDate',
+                               'active', 'pausedRanges', 'order', 'createdAt', 'deleted', 'updatedAt'])
+        && d.keys().hasAll(['name', 'description', 'icon', 'color', 'days', 'weeklyTarget', 'startDate',
+                            'active', 'pausedRanges', 'order', 'createdAt', 'deleted', 'updatedAt'])
+        && d.name is string && d.name.size() >= 1 && d.name.size() <= 40
+        && isText(d.description, 80)
+        && d.icon is string && d.icon.matches('^[a-zA-Z]{1,20}$')
+        && d.color is string && d.color.matches('^#[0-9a-fA-F]{6}$')
+        && d.days is list && d.days.size() >= 1 && d.days.size() <= 7 && d.days.hasOnly([0, 1, 2, 3, 4, 5, 6])
+        && intIn(d.weeklyTarget, 1, 7)
+        && isDate(d.startDate)
+        && d.active is bool
+        && d.pausedRanges is list && d.pausedRanges.size() <= 100
+        && intIn(d.order, -1000000, 1000000)
+        && isText(d.createdAt, 40)
+        && d.deleted is bool
+        && stamped(d);
+    }
+
+    function validGoal(d) {
+      return d.keys().hasOnly(['title', 'mode', 'habitId', 'current', 'target', 'unit', 'startDate',
+                               'deadline', 'createdAt', 'deleted', 'updatedAt'])
+        && d.keys().hasAll(['title', 'mode', 'habitId', 'current', 'target', 'unit', 'startDate',
+                            'deadline', 'createdAt', 'deleted', 'updatedAt'])
+        && d.title is string && d.title.size() >= 1 && d.title.size() <= 60
+        && d.mode in ['manual', 'habit']
+        && (d.habitId == null || isId(d.habitId))
+        && intIn(d.current, 0, 1000000000)
+        && intIn(d.target, 1, 1000000000)
+        && isText(d.unit, 16)
+        && isDate(d.startDate)
+        && (d.deadline == '' || isDate(d.deadline))
+        && isText(d.createdAt, 40)
+        && d.deleted is bool
+        && stamped(d);
+    }
+
+    function validLog(d, logId) {
+      return d.keys().hasOnly(['habitId', 'date', 'status', 'updatedAt'])
+        && d.keys().hasAll(['habitId', 'date', 'status', 'updatedAt'])
+        && isId(d.habitId)
+        && isDate(d.date)
+        && logId == d.habitId + '_' + d.date
+        && (d.status == null || d.status in ['done', 'skipped'])
+        && stamped(d);
+    }
+
+    match /users/{uid} {
+      allow get, delete: if isOwner(uid);
+      allow create, update: if isOwner(uid) && validProfile(request.resource.data);
+
+      match /habits/{habitId} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid) && isId(habitId) && validHabit(request.resource.data);
+      }
+      match /goals/{goalId} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid) && isId(goalId) && validGoal(request.resource.data);
+      }
+      match /logs/{logId} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid) && validLog(request.resource.data, logId);
+      }
+    }
+    // Everything else is closed
+  }
+}

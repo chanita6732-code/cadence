@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="description" content="Cadence — track daily habits, streaks and goals. Syncs across your devices." />
+  <meta name="theme-color" content="#0a0e1f" />
+  <title>Cadence — Habit Tracker</title>
+
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+
+  <!-- Apply the saved theme before first paint to avoid a flash -->
+  <script>
+    try {
+      var p = JSON.parse(localStorage.getItem('cadence:v2:prefs') || 'null');
+      if (p && (p.theme === 'light' || p.theme === 'dark')) document.documentElement.setAttribute('data-theme', p.theme);
+    } catch (e) {}
+  </script>
+  <link rel="stylesheet" href="vendor/inter-font.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Shared SVG gradient used by progress rings -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <defs>
+      <linearGradient id="gradAccent" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" style="stop-color:var(--grad-a)" />
+        <stop offset="1" style="stop-color:var(--grad-b)" />
+      </linearGradient>
+    </defs>
+  </svg>
+
+  <!-- ============ Boot / loading state ============ -->
+  <div class="boot" id="boot" aria-live="polite">
+    <div class="boot-inner">
+      <span class="brand-mark lg" aria-hidden="true"></span>
+      <div class="spinner" aria-hidden="true"></div>
+      <p>Loading…</p>
+    </div>
+  </div>
+
+  <!-- ============ Sign in / sign up ============ -->
+  <div class="auth" id="auth" hidden>
+    <div class="auth-card">
+      <div class="auth-brand"><span class="brand-mark" aria-hidden="true"></span><span>Cadence</span></div>
+
+      <!-- Sign in / create account -->
+      <div id="authMain">
+        <h1 id="authTitle">Welcome back</h1>
+        <p class="muted" id="authLead">Sign in to keep your habits in sync on every device.</p>
+
+        <button class="btn btn-google btn-block" type="button" data-action="google-sign-in">
+          <svg class="g-logo" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+          Continue with Google
+        </button>
+        <div class="auth-divider"><span>or use email</span></div>
+
+        <div class="segmented full" id="authTabs" role="tablist">
+          <button type="button" class="active" data-auth-tab="signin" role="tab">Sign in</button>
+          <button type="button" data-auth-tab="signup" role="tab">Create account</button>
+        </div>
+
+        <form class="form" id="authForm" novalidate>
+          <div class="field" id="authNameField" hidden>
+            <label for="authName">Your name</label>
+            <input id="authName" name="displayName" type="text" maxlength="40" autocomplete="name" placeholder="What should we call you?" />
+          </div>
+          <div class="field">
+            <label for="authEmail">Email</label>
+            <input id="authEmail" name="email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com" required />
+          </div>
+          <div class="field">
+            <label for="authPassword">Password</label>
+            <div class="password">
+              <input id="authPassword" name="password" type="password" autocomplete="current-password" minlength="8" placeholder="At least 8 characters" required />
+              <button type="button" class="icon-btn" data-action="toggle-password" aria-label="Show password"><span class="i" data-icon="eye"></span></button>
+            </div>
+          </div>
+          <p class="form-msg" id="authMsg" role="alert"></p>
+          <button class="btn btn-primary btn-block" type="submit" id="authSubmit">Sign in</button>
+          <button class="link-btn center" type="button" data-action="show-reset" id="forgotLink">Forgot password?</button>
+        </form>
+      </div>
+
+      <!-- Password reset request -->
+      <div id="authReset" hidden>
+        <h1>Reset password</h1>
+        <p class="muted">We'll email you a link to choose a new password.</p>
+        <form class="form" id="resetForm" novalidate>
+          <div class="field">
+            <label for="resetEmail">Email</label>
+            <input id="resetEmail" type="email" autocomplete="email" inputmode="email" required />
+          </div>
+          <p class="form-msg" id="resetMsg" role="alert"></p>
+          <button class="btn btn-primary btn-block" type="submit">Send reset link</button>
+          <button class="link-btn center" type="button" data-action="show-signin">Back to sign in</button>
+        </form>
+      </div>
+
+      <div class="notice" id="authNotConfigured" hidden>
+        <span class="i" data-icon="info"></span>
+        <p>Accounts aren't set up on this site yet, so you can only use Cadence on this device. The owner can enable accounts by following <code>README.md</code>.</p>
+      </div>
+
+      <div class="auth-divider" id="authDivider"><span>or</span></div>
+      <button class="btn btn-ghost btn-block" type="button" data-action="use-guest">Continue without an account</button>
+      <p class="hint center">Your data stays on this device. You can sign in later and bring it with you.</p>
+    </div>
+  </div>
+
+  <div class="app" id="app" hidden>
+    <!-- ============ Sidebar (desktop / tablet) ============ -->
+    <aside class="sidebar" aria-label="Main navigation">
+      <a class="brand" href="#dashboard">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-name">Cadence</span>
+      </a>
+
+      <nav class="nav">
+        <a class="nav-link" href="#dashboard" data-view="dashboard"><span class="i" data-icon="dashboard"></span><span class="label">Dashboard</span></a>
+        <a class="nav-link" href="#habits" data-view="habits"><span class="i" data-icon="habits"></span><span class="label">Habits</span></a>
+        <a class="nav-link" href="#calendar" data-view="calendar"><span class="i" data-icon="calendar"></span><span class="label">Calendar</span></a>
+        <a class="nav-link" href="#statistics" data-view="statistics"><span class="i" data-icon="stats"></span><span class="label">Statistics</span></a>
+        <a class="nav-link" href="#goals" data-view="goals"><span class="i" data-icon="target"></span><span class="label">Goals</span></a>
+        <a class="nav-link" href="#settings" data-view="settings"><span class="i" data-icon="settings"></span><span class="label">Settings</span></a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <button class="sync-pill" type="button" data-action="sync-now" data-sync-pill>
+          <span class="sync-dot" aria-hidden="true"></span><span class="label sync-text">This device only</span>
+        </button>
+        <a class="profile" href="#settings" title="Account & settings">
+          <span class="avatar" data-bind="initials"></span>
+          <span class="profile-text">
+            <strong data-bind="name"></strong>
+            <small data-bind="account"></small>
+          </span>
+        </a>
+        <button class="theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle dark / light mode">
+          <span class="i theme-icon" data-icon="moon"></span>
+          <span class="label theme-label">Dark mode</span>
+          <span class="switch" aria-hidden="true"><span></span></span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- ============ Main ============ -->
+    <main class="main" id="main">
+      <div class="banner" id="saveBanner" role="alert" hidden>
+        <span class="i" data-icon="alert"></span>
+        <span>Changes couldn't be saved on this device (storage is full or blocked). Export a backup from Settings to keep them.</span>
+      </div>
+
+      <header class="topbar">
+        <div class="topbar-text">
+          <p class="eyebrow" id="headerDate"></p>
+          <h1 id="headerTitle">Hello</h1>
+          <p class="subtitle" id="headerSubtitle"></p>
+        </div>
+        <div class="topbar-actions">
+          <button class="icon-btn only-mobile sync-icon" type="button" data-action="sync-now" data-sync-pill aria-label="Sync status">
+            <span class="sync-dot" aria-hidden="true"></span>
+          </button>
+          <button class="icon-btn only-mobile" type="button" data-action="toggle-theme" aria-label="Toggle theme"><span class="i theme-icon" data-icon="moon"></span></button>
+          <button class="btn btn-primary" type="button" data-action="add-habit" aria-label="Add habit">
+            <span class="i" data-icon="plus"></span><span class="hide-sm">Add habit</span>
+          </button>
+          <a class="avatar-btn" href="#settings" aria-label="Account & settings"><span class="avatar" data-bind="initials"></span></a>
+        </div>
+      </header>
+
+      <!-- ===================== DASHBOARD ===================== -->
+      <section class="view" id="view-dashboard" data-view="dashboard">
+        <!-- First-run onboarding (shown when there are no habits) -->
+        <article class="card welcome" id="welcome" hidden>
+          <div class="welcome-text">
+            <h2>Let's build your first habit</h2>
+            <p class="muted">Pick a template to start quickly, or create your own. You can change everything later.</p>
+          </div>
+          <div class="template-grid" id="templateGrid"></div>
+          <button class="btn btn-primary" type="button" data-action="add-habit"><span class="i" data-icon="plus"></span>Create a custom habit</button>
+        </article>
+
+        <div id="dashContent">
+          <div class="summary-grid">
+            <article class="card stat-card">
+              <div class="stat-head"><span>Today's progress</span><span class="stat-icon i" data-icon="checkCircle"></span></div>
+              <div class="stat-body">
+                <div class="ring" id="todayRing" style="--p:0">
+                  <svg viewBox="0 0 36 36" aria-hidden="true"><circle class="ring-track" cx="18" cy="18" r="15.9" /><circle class="ring-fill" cx="18" cy="18" r="15.9" /></svg>
+                </div>
+                <div>
+                  <div class="stat-value"><span id="statToday">0</span><small>%</small></div>
+                  <p class="stat-meta" id="statTodayMeta">—</p>
+                </div>
+              </div>
+            </article>
+            <article class="card stat-card" id="streakCard">
+              <div class="stat-head"><span>Current streak</span><span class="stat-icon i" data-icon="flame"></span></div>
+              <div class="stat-value"><span id="statStreak">0</span><small id="statStreakUnit">days</small></div>
+              <p class="stat-meta" id="statStreakMeta">—</p>
+            </article>
+            <article class="card stat-card">
+              <div class="stat-head"><span>Habits completed</span><span class="stat-icon i" data-icon="habits"></span></div>
+              <div class="stat-value"><span id="statDone">0</span><small> / <span id="statTotal">0</span></small></div>
+              <div class="segments" id="statSegments" aria-hidden="true"></div>
+              <p class="stat-meta">today</p>
+            </article>
+            <article class="card stat-card">
+              <div class="stat-head"><span>Overall completion</span><span class="stat-icon i" data-icon="trend"></span></div>
+              <div class="stat-value"><span id="statOverall">0</span><small>%</small></div>
+              <div class="bar"><span id="statOverallBar" style="width:0"></span></div>
+              <p class="stat-meta" id="statOverallMeta">—</p>
+            </article>
+          </div>
+
+          <div class="dash-grid">
+            <!-- Today's habits -->
+            <article class="card span-5" id="todayCard">
+              <div class="card-head">
+                <div>
+                  <h2>Today's habits</h2>
+                  <p class="muted" id="todayCaption">—</p>
+                </div>
+                <div class="segmented" id="todayFilter">
+                  <button type="button" class="active" data-filter="all">All</button>
+                  <button type="button" data-filter="pending">To do</button>
+                  <button type="button" data-filter="done">Done</button>
+                </div>
+              </div>
+              <ul class="today-list" id="todayList"></ul>
+            </article>
+
+            <!-- 7-day progress chart -->
+            <article class="card span-7">
+              <div class="card-head">
+                <div>
+                  <h2>Completion rate</h2>
+                  <p class="muted">Last 7 days · <span id="weekAvg">—</span></p>
+                </div>
+                <a class="link-btn" href="#statistics">Statistics <span class="i" data-icon="chevronRight"></span></a>
+              </div>
+              <div class="chart-box" id="weekChartBox"><canvas id="weekChart" aria-label="Completion rate for the last 7 days" role="img"></canvas></div>
+            </article>
+
+            <!-- Weekly tracker -->
+            <article class="card span-12">
+              <div class="card-head">
+                <div>
+                  <h2>Weekly tracker</h2>
+                  <p class="muted" id="weekRange">—</p>
+                </div>
+                <div class="pager">
+                  <button class="icon-btn" type="button" data-action="week-prev" aria-label="Previous week"><span class="i" data-icon="chevronLeft"></span></button>
+                  <button class="btn btn-ghost sm" type="button" data-action="week-today">This week</button>
+                  <button class="icon-btn" type="button" data-action="week-next" id="weekNextBtn" aria-label="Next week"><span class="i" data-icon="chevronRight"></span></button>
+                </div>
+              </div>
+              <div class="table-scroll" id="weekTracker"></div>
+              <div class="legend">
+                <span><i class="cell-demo done"></i>Done</span>
+                <span><i class="cell-demo skipped"></i>Skipped</span>
+                <span><i class="cell-demo"></i>Not done</span>
+                <span><i class="cell-demo today"></i>Today</span>
+                <span><i class="cell-demo off"></i>Not scheduled</span>
+                <span class="legend-hint">Tap a cell: done → skipped → clear</span>
+              </div>
+            </article>
+
+            <!-- Streaks + heatmap -->
+            <article class="card span-8">
+              <div class="card-head">
+                <div>
+                  <h2>Streaks</h2>
+                  <p class="muted" id="streakRule">—</p>
+                </div>
+              </div>
+              <div class="streak-stats">
+                <div><span class="k">Current streak</span><strong id="streakCurrent">0</strong><small>days</small></div>
+                <div><span class="k">Longest streak</span><strong id="streakLongest">0</strong><small>days</small></div>
+                <div><span class="k">Successful days</span><strong id="streakDays">0</strong><small>total</small></div>
+              </div>
+              <div class="heatmap-wrap" id="heatmap"></div>
+              <div class="legend heat-legend">
+                <span>Less</span><i class="hm l0"></i><i class="hm l1"></i><i class="hm l2"></i><i class="hm l3"></i><i class="hm l4"></i><span>More</span>
+              </div>
+            </article>
+
+            <!-- Goals preview -->
+            <article class="card span-4">
+              <div class="card-head">
+                <div>
+                  <h2>Goals</h2>
+                  <p class="muted" id="goalsCaption">—</p>
+                </div>
+                <a class="link-btn" href="#goals">View all <span class="i" data-icon="chevronRight"></span></a>
+              </div>
+              <div class="goal-mini-list" id="goalsPreview"></div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== HABITS ===================== -->
+      <section class="view" id="view-habits" data-view="habits" hidden>
+        <div class="toolbar">
+          <label class="search">
+            <span class="i" data-icon="search"></span>
+            <input type="search" id="habitSearch" placeholder="Search habits…" autocomplete="off" aria-label="Search habits" />
+          </label>
+          <div class="segmented" id="habitFilter">
+            <button type="button" class="active" data-filter="all">All</button>
+            <button type="button" data-filter="active">Active</button>
+            <button type="button" data-filter="paused">Paused</button>
+          </div>
+        </div>
+        <div class="habit-grid" id="habitGrid"></div>
+      </section>
+
+      <!-- ===================== CALENDAR ===================== -->
+      <section class="view" id="view-calendar" data-view="calendar" hidden>
+        <div class="calendar-layout">
+          <article class="card">
+            <div class="card-head">
+              <h2 id="calTitle">—</h2>
+              <div class="pager">
+                <button class="icon-btn" type="button" data-action="cal-prev" aria-label="Previous month"><span class="i" data-icon="chevronLeft"></span></button>
+                <button class="btn btn-ghost sm" type="button" data-action="cal-today">Today</button>
+                <button class="icon-btn" type="button" data-action="cal-next" aria-label="Next month"><span class="i" data-icon="chevronRight"></span></button>
+              </div>
+            </div>
+            <div class="cal-weekdays" id="calWeekdays"></div>
+            <div class="cal-grid" id="calGrid"></div>
+            <div class="legend">
+              <span><i class="hm l0"></i>0%</span>
+              <span><i class="hm l2"></i>Partial</span>
+              <span><i class="hm l4"></i>100%</span>
+              <span class="legend-hint">Dots show completed habits</span>
+            </div>
+          </article>
+          <article class="card day-panel" id="dayPanel"></article>
+        </div>
+      </section>
+
+      <!-- ===================== STATISTICS ===================== -->
+      <section class="view" id="view-statistics" data-view="statistics" hidden>
+        <div class="toolbar">
+          <p class="muted" id="statsRangeLabel">—</p>
+          <div class="segmented" id="statsRange">
+            <button type="button" data-range="7">7 days</button>
+            <button type="button" class="active" data-range="30">30 days</button>
+            <button type="button" data-range="90">90 days</button>
+          </div>
+        </div>
+
+        <div class="kpi-grid" id="kpiGrid"></div>
+
+        <div class="dash-grid">
+          <article class="card span-12">
+            <div class="card-head"><div><h2>Daily completion rate</h2><p class="muted">Share of scheduled habits completed each day</p></div></div>
+            <div class="chart-box tall" id="trendChartBox"><canvas id="trendChart" role="img" aria-label="Daily completion rate line chart"></canvas></div>
+          </article>
+          <article class="card span-7">
+            <div class="card-head"><div><h2>Completion by habit</h2><p class="muted">Completed ÷ scheduled in this range</p></div></div>
+            <div class="chart-box tall" id="habitChartBox"><canvas id="habitChart" role="img" aria-label="Completion rate by habit bar chart"></canvas></div>
+          </article>
+          <article class="card span-5">
+            <div class="card-head"><div><h2>Check-in breakdown</h2><p class="muted">All scheduled check-ins in this range</p></div></div>
+            <div class="chart-box tall" id="donutChartBox"><canvas id="donutChart" role="img" aria-label="Done, skipped and missed donut chart"></canvas></div>
+          </article>
+        </div>
+      </section>
+
+      <!-- ===================== GOALS ===================== -->
+      <section class="view" id="view-goals" data-view="goals" hidden>
+        <div class="toolbar">
+          <div class="segmented" id="goalFilter">
+            <button type="button" class="active" data-filter="all">All</button>
+            <button type="button" data-filter="active">In progress</button>
+            <button type="button" data-filter="done">Completed</button>
+          </div>
+          <button class="btn btn-primary" type="button" data-action="add-goal"><span class="i" data-icon="plus"></span>New goal</button>
+        </div>
+        <div class="goal-grid" id="goalGrid"></div>
+      </section>
+
+      <!-- ===================== SETTINGS ===================== -->
+      <section class="view" id="view-settings" data-view="settings" hidden>
+        <div class="settings-grid">
+          <article class="card" id="accountCard"></article>
+
+          <article class="card">
+            <div class="card-head"><h2>Profile</h2></div>
+            <form id="profileForm" class="form">
+              <div class="profile-row">
+                <span class="avatar xl" data-bind="initials"></span>
+                <div class="field grow">
+                  <label for="profileName">Display name</label>
+                  <input id="profileName" name="displayName" type="text" maxlength="40" required />
+                </div>
+              </div>
+              <div class="form-actions"><button class="btn btn-primary" type="submit">Save profile</button></div>
+            </form>
+          </article>
+
+          <article class="card">
+            <div class="card-head"><h2>Preferences</h2></div>
+            <form id="prefsForm" class="form">
+              <div class="field">
+                <span class="field-label">Appearance <span class="optional">this device</span></span>
+                <div class="segmented full" id="themeChoice">
+                  <button type="button" data-theme-choice="dark">Dark</button>
+                  <button type="button" data-theme-choice="light">Light</button>
+                </div>
+              </div>
+              <div class="field">
+                <label for="weekStart">Week starts on</label>
+                <select id="weekStart" name="weekStart">
+                  <option value="1">Monday</option>
+                  <option value="0">Sunday</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="streakThreshold">A day counts toward your streak when</label>
+                <select id="streakThreshold" name="streakThreshold">
+                  <option value="50">at least 50% of its habits are done</option>
+                  <option value="80">at least 80% of its habits are done</option>
+                  <option value="100">all of its habits are done</option>
+                </select>
+              </div>
+              <div class="form-actions"><button class="btn btn-primary" type="submit">Save preferences</button></div>
+            </form>
+          </article>
+
+          <article class="card">
+            <div class="card-head"><h2>Your data</h2></div>
+            <p class="muted" id="dataLead"></p>
+            <div class="data-actions">
+              <button class="btn btn-ghost" type="button" data-action="export"><span class="i" data-icon="download"></span>Export backup</button>
+              <label class="btn btn-ghost file-btn" tabindex="0"><span class="i" data-icon="upload"></span>Import backup<input type="file" id="importFile" accept="application/json,.json" hidden /></label>
+              <button class="btn btn-danger-ghost" type="button" data-action="clear-all"><span class="i" data-icon="trash"></span>Delete all habits &amp; goals</button>
+            </div>
+            <p class="muted small" id="storageInfo"></p>
+          </article>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- ============ Bottom navigation (mobile) ============ -->
+  <nav class="bottom-nav" id="bottomNav" aria-label="Main navigation" hidden>
+    <a href="#dashboard" data-view="dashboard"><span class="i" data-icon="dashboard"></span><span>Home</span></a>
+    <a href="#habits" data-view="habits"><span class="i" data-icon="habits"></span><span>Habits</span></a>
+    <a href="#calendar" data-view="calendar"><span class="i" data-icon="calendar"></span><span>Calendar</span></a>
+    <a href="#statistics" data-view="statistics"><span class="i" data-icon="stats"></span><span>Stats</span></a>
+    <a href="#goals" data-view="goals"><span class="i" data-icon="target"></span><span>Goals</span></a>
+  </nav>
+
+  <!-- ============ Habit modal ============ -->
+  <dialog class="modal" id="habitModal" aria-labelledby="habitModalTitle">
+    <form id="habitForm" class="form" method="dialog" novalidate>
+      <div class="modal-head">
+        <h2 id="habitModalTitle">New habit</h2>
+        <button class="icon-btn" type="button" data-close aria-label="Close"><span class="i" data-icon="x"></span></button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label for="habitName">Name</label>
+          <input id="habitName" name="habitName" type="text" maxlength="40" placeholder="e.g. Read 20 pages" required />
+          <p class="field-error" data-error-for="habitName"></p>
+        </div>
+        <div class="field">
+          <label for="habitDesc">Description <span class="optional">optional</span></label>
+          <input id="habitDesc" name="description" type="text" maxlength="80" placeholder="A short note to keep you on track" />
+        </div>
+        <div class="field">
+          <span class="field-label">Icon</span>
+          <div class="icon-picker" id="iconPicker"></div>
+        </div>
+        <div class="field">
+          <span class="field-label">Color</span>
+          <div class="color-picker" id="colorPicker"></div>
+        </div>
+        <div class="field">
+          <span class="field-label">Repeat on</span>
+          <div class="chip-row" id="freqPresets">
+            <button type="button" class="chip" data-preset="daily">Every day</button>
+            <button type="button" class="chip" data-preset="weekdays">Weekdays</button>
+            <button type="button" class="chip" data-preset="weekends">Weekends</button>
+          </div>
+          <div class="day-picker" id="dayPicker"></div>
+          <p class="field-error" data-error-for="days"></p>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="habitTarget">Weekly target</label>
+            <div class="stepper">
+              <button type="button" class="icon-btn" data-step="-1" aria-label="Decrease"><span class="i" data-icon="minus"></span></button>
+              <input id="habitTarget" name="weeklyTarget" type="number" min="1" max="7" value="7" inputmode="numeric" />
+              <button type="button" class="icon-btn" data-step="1" aria-label="Increase"><span class="i" data-icon="plus"></span></button>
+            </div>
+            <p class="hint">times per week</p>
+          </div>
+          <div class="field">
+            <label for="habitStart">Start date</label>
+            <input id="habitStart" name="startDate" type="date" required />
+            <p class="field-error" data-error-for="startDate"></p>
+            <p class="hint">Days before this aren't counted</p>
+          </div>
+        </div>
+        <p class="notice subtle" id="habitHistoryNote" hidden>
+          <span class="i" data-icon="info"></span>
+          <span>Changing the days or start date recalculates past statistics for this habit.</span>
+        </p>
+        <label class="toggle-row">
+          <span><strong>Active</strong><small>Paused habits are hidden from today and don't affect your streak</small></span>
+          <input type="checkbox" name="active" id="habitActive" class="switch-input" checked />
+        </label>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-danger-ghost" type="button" id="habitDeleteBtn" hidden><span class="i" data-icon="trash"></span>Delete</button>
+        <span class="spacer"></span>
+        <button class="btn btn-ghost" type="button" data-close>Cancel</button>
+        <button class="btn btn-primary" type="submit" id="habitSubmit">Create habit</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ============ Goal modal ============ -->
+  <dialog class="modal" id="goalModal" aria-labelledby="goalModalTitle">
+    <form id="goalForm" class="form" method="dialog" novalidate>
+      <div class="modal-head">
+        <h2 id="goalModalTitle">New goal</h2>
+        <button class="icon-btn" type="button" data-close aria-label="Close"><span class="i" data-icon="x"></span></button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label for="goalTitle">Goal</label>
+          <input id="goalTitle" name="goalTitle" type="text" maxlength="60" placeholder="e.g. Read 10 books" required />
+          <p class="field-error" data-error-for="goalTitle"></p>
+        </div>
+        <div class="field">
+          <span class="field-label">Track progress</span>
+          <div class="segmented full" id="goalModeChoice">
+            <button type="button" data-mode="manual">Manually</button>
+            <button type="button" data-mode="habit">From a habit</button>
+          </div>
+        </div>
+        <div class="field" id="goalHabitField" hidden>
+          <label for="goalHabit">Linked habit</label>
+          <select id="goalHabit" name="habitId"></select>
+          <p class="hint">Each completed check-in on a scheduled day (from the start date) counts as 1.</p>
+        </div>
+        <div class="field-row">
+          <div class="field" id="goalCurrentField">
+            <label for="goalCurrent">Current</label>
+            <input id="goalCurrent" name="current" type="number" min="0" step="1" value="0" inputmode="numeric" />
+          </div>
+          <div class="field">
+            <label for="goalTarget">Target</label>
+            <input id="goalTarget" name="goalTarget" type="number" min="1" step="1" value="10" inputmode="numeric" required />
+            <p class="field-error" data-error-for="goalTarget"></p>
+          </div>
+          <div class="field">
+            <label for="goalUnit">Unit <span class="optional">optional</span></label>
+            <input id="goalUnit" name="unit" type="text" maxlength="16" placeholder="books" />
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="goalStart">Start date</label>
+            <input id="goalStart" name="startDate" type="date" required />
+          </div>
+          <div class="field">
+            <label for="goalDeadline">Deadline <span class="optional">optional</span></label>
+            <input id="goalDeadline" name="deadline" type="date" />
+            <p class="field-error" data-error-for="deadline"></p>
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-danger-ghost" type="button" id="goalDeleteBtn" hidden><span class="i" data-icon="trash"></span>Delete</button>
+        <span class="spacer"></span>
+        <button class="btn btn-ghost" type="button" data-close>Cancel</button>
+        <button class="btn btn-primary" type="submit" id="goalSubmit">Create goal</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ============ Confirm modal ============ -->
+  <dialog class="modal modal-sm" id="confirmModal" aria-labelledby="confirmTitle">
+    <div class="modal-body confirm">
+      <span class="confirm-icon i" id="confirmIcon" data-icon="alert"></span>
+      <h2 id="confirmTitle">Are you sure?</h2>
+      <p class="muted" id="confirmMessage"></p>
+    </div>
+    <div class="modal-foot">
+      <span class="spacer"></span>
+      <button class="btn btn-ghost" type="button" id="confirmCancel">Cancel</button>
+      <button class="btn btn-danger" type="button" id="confirmOk">Delete</button>
+    </div>
+  </dialog>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+
+  <!-- All scripts are local: the app works offline and never waits on a CDN -->
+  <script src="config.js"></script>
+  <script src="vendor/firebase-app-compat.js" defer></script>
+  <script src="vendor/firebase-auth-compat.js" defer></script>
+  <script src="vendor/firebase-firestore-compat.js" defer></script>
+  <script src="vendor/chart.umd.min.js" defer></script>
+  <script src="script.js" defer></script>
+</body>
+</html>
