@@ -166,6 +166,7 @@ code { font-size: .92em; padding: 1px 5px; border-radius: 5px; background: var(-
 .auth-card > div > .muted { margin-bottom: 16px; }
 .auth-card .segmented { margin-bottom: 16px; }
 .auth-divider { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 12px; }
+#authMain .auth-divider { margin: 16px 0; }
 .auth-divider::before, .auth-divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
 .password { position: relative; }
 .password input { padding-right: 46px !important; }
