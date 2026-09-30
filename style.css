@@ -8,7 +8,7 @@
 
 /* ---------- Design tokens ---------- */
 :root {
-  --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Thai", "Leelawadee UI", Thonburi, sans-serif;
+  --font: "Inter", "Noto Sans Thai", system-ui, -apple-system, "Segoe UI", Roboto, "Leelawadee UI", Thonburi, sans-serif;
 
   --radius-sm: 8px;
   --radius: 12px;
@@ -162,6 +162,12 @@ code { font-size: .92em; padding: 1px 5px; border-radius: 5px; background: var(-
   display: flex; flex-direction: column; gap: 16px;
 }
 .auth-brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; margin-bottom: 4px; }
+.lang-switch {
+  margin-left: auto; padding: 6px 12px; border-radius: 99px;
+  border: 1px solid var(--border-strong); color: var(--text-2);
+  font-size: 13px; font-weight: 600; transition: background .15s, color .15s, border-color .15s;
+}
+.lang-switch:hover { background: var(--surface-2); color: var(--text); border-color: var(--accent); }
 .auth-card h1 { font-size: 24px; letter-spacing: -.02em; margin-bottom: 4px; }
 .auth-card > div > .muted { margin-bottom: 16px; }
 .auth-card .segmented { margin-bottom: 16px; }
@@ -897,6 +903,11 @@ button.cell:active { transform: scale(.88); }
   .streak-stats > div { display: flex; align-items: baseline; justify-content: space-between; }
   .template-grid { grid-template-columns: 1fr; }
 }
+
+/* Thai: tighter tracking hurts Thai glyphs, and vowels/tone marks need a little more line height */
+:lang(th) h1, :lang(th) h2, :lang(th) h3, :lang(th) .stat-value, :lang(th) .kpi .v, :lang(th) .goal-num strong, :lang(th) .streak-stats strong { letter-spacing: 0; }
+:lang(th) body { line-height: 1.6; }
+:lang(th) .day-section h3 { text-transform: none; letter-spacing: 0; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }

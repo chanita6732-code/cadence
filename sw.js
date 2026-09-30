@@ -4,14 +4,16 @@
    Only same-origin GET requests are handled; Firebase calls always
    go to the network. Bump CACHE when you deploy a new version.
    ========================================================= */
-const CACHE = 'cadence-v2.1.1';
+const CACHE = 'cadence-v2.2.0';
 const SHELL = [
   './',
   './index.html',
   './style.css',
   './vendor/inter-font.css',
+  './vendor/noto-sans-thai-font.css',
   './script.js',
   './config.js',
+  './i18n.js',
   './manifest.webmanifest',
   './vendor/chart.umd.min.js',
   './vendor/firebase-app-compat.js',

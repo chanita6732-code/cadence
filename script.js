@@ -33,7 +33,6 @@ const pad = (n) => String(n).padStart(2, '0');
 const escapeHtml = (s = '') => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const pct = (n) => (n == null ? null : Math.round(n * 100));
 const nowIso = () => new Date().toISOString();
-const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 const withTimeout = (promise, ms) => Promise.race([promise, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
 
 function uuid() {
@@ -46,11 +45,27 @@ function uuid() {
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isUuid = (v) => typeof v === 'string' && UUID_RE.test(v);
 
-const DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const DAY_LETTER = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const MONTH_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
+
+/* ---------- Language (strings live in i18n.js) ---------- */
+const LANGS = ['en', 'th'];
+const Lang = {
+  current: 'en',
+  locale() { return this.current === 'th' ? 'th-TH' : 'en-US'; },
+  dict() { return (window.I18N && window.I18N[this.current]) || {}; },
+};
+/** Translate a key; {placeholders} are filled from vars. Counted phrases pick one/other by vars.n. */
+function t(key, vars = {}) {
+  const en = (window.I18N && window.I18N.en) || {};
+  let v = Lang.dict()[key] ?? en[key] ?? key;
+  if (v && typeof v === 'object' && !Array.isArray(v)) v = vars.n === 1 && v.one ? v.one : v.other;
+  return String(v).replace(/\{(\w+)\}/g, (m, k) => (k in vars ? String(vars[k]) : m));
+}
+const tn = (key, n) => t(key, { n });
+const dayShort = (d) => (Lang.dict().days || window.I18N.en.days)[d];
+const dayLetter = (d) => (Lang.dict().dayLetters || window.I18N.en.dayLetters)[d];
+const monthShort = (m) => new Date(2000, m, 1).toLocaleDateString(Lang.locale(), { month: 'short' });
+const monthLong = (m) => new Date(2000, m, 1).toLocaleDateString(Lang.locale(), { month: 'long' });
 
 /* Dates are local calendar days, keyed "YYYY-MM-DD". */
 const toKey = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -60,8 +75,8 @@ const todayKey = () => toKey(today());
 const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
 const diffDays = (a, b) => Math.round((fromKey(toKey(b)) - fromKey(toKey(a))) / 86400000); // b − a
 const startOfWeek = (d, weekStart) => addDays(d, -((d.getDay() - weekStart + 7) % 7));
-const fmtDate = (d, opts = { month: 'short', day: 'numeric' }) => d.toLocaleDateString('en-US', opts);
-const fmtLong = (d) => d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+const fmtDate = (d, opts = { month: 'short', day: 'numeric' }) => d.toLocaleDateString(Lang.locale(), opts);
+const fmtLong = (d) => d.toLocaleDateString(Lang.locale(), { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 const maxKey = (a, b) => (a > b ? a : b);
 const minKey = (a, b) => (a < b ? a : b);
 
@@ -76,12 +91,12 @@ function isDateKey(s) {
 }
 
 function relativeTime(iso) {
-  if (!iso) return 'never';
+  if (!iso) return t('never');
   const s = Math.round((Date.now() - Date.parse(iso)) / 1000);
-  if (s < 10) return 'just now';
-  if (s < 60) return `${s}s ago`;
-  if (s < 3600) return `${Math.round(s / 60)} min ago`;
-  if (s < 86400) return `${Math.round(s / 3600)} h ago`;
+  if (s < 10) return t('justNow');
+  if (s < 60) return t('secondsAgo', { n: s });
+  if (s < 3600) return t('minutesAgo', { n: Math.round(s / 60) });
+  if (s < 86400) return t('hoursAgo', { n: Math.round(s / 3600) });
   return fmtDate(new Date(iso));
 }
 
@@ -144,16 +159,17 @@ const HABIT_ICONS = ['book', 'study', 'dumbbell', 'run', 'code', 'globe', 'dropl
 /* Fixed categorical order, validated for colour-vision deficiencies on dark surfaces. */
 const HABIT_COLORS = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#2f9e44', '#9085e9', '#e66767'];
 
-/** Starting points for new users — they only pre-fill the form; nothing is created until the user saves. */
+/** Starting points for new users — they only pre-fill the form; nothing is created until the user saves.
+    Names come from i18n.js (tplStudy, tplStudyDesc, …) so they follow the chosen language. */
 const TEMPLATES = [
-  { name: 'Study', description: 'Focused session, 45 minutes', icon: 'study', days: [1, 2, 3, 4, 5] },
-  { name: 'Exercise', description: 'Workout or a 30-minute run', icon: 'dumbbell', days: [1, 3, 5], weeklyTarget: 3 },
-  { name: 'Read', description: '20 pages', icon: 'book', days: ALL_DAYS },
-  { name: 'Practice English', description: 'Speaking or listening, 15 min', icon: 'globe', days: ALL_DAYS },
-  { name: 'Coding', description: 'Build something small', icon: 'code', days: [1, 2, 3, 4, 5] },
-  { name: 'Sleep early', description: 'In bed by 11 pm', icon: 'bed', days: ALL_DAYS },
-  { name: 'Drink water', description: '8 glasses a day', icon: 'droplet', days: ALL_DAYS },
-  { name: 'Meditate', description: '10 quiet minutes', icon: 'leaf', days: ALL_DAYS },
+  { key: 'tplStudy', icon: 'study', days: [1, 2, 3, 4, 5] },
+  { key: 'tplExercise', icon: 'dumbbell', days: [1, 3, 5], weeklyTarget: 3 },
+  { key: 'tplRead', icon: 'book', days: ALL_DAYS },
+  { key: 'tplEnglish', icon: 'globe', days: ALL_DAYS },
+  { key: 'tplCoding', icon: 'code', days: [1, 2, 3, 4, 5] },
+  { key: 'tplSleep', icon: 'bed', days: ALL_DAYS },
+  { key: 'tplWater', icon: 'droplet', days: ALL_DAYS },
+  { key: 'tplMeditate', icon: 'leaf', days: ALL_DAYS },
 ];
 
 function icon(name) {
@@ -325,12 +341,13 @@ const LocalDB = {
 };
 
 const Prefs = {
-  data: { theme: 'dark', mode: null, lastUser: null, v1Handled: false },
+  data: { theme: 'dark', lang: null, mode: null, lastUser: null, v1Handled: false },
   load() {
     const r = LocalDB.read(PREFS_KEY);
     const v = r.status === 'ok' && r.value && typeof r.value === 'object' ? r.value : {};
     this.data = {
       theme: v.theme === 'light' ? 'light' : 'dark',
+      lang: LANGS.includes(v.lang) ? v.lang : null,
       mode: v.mode === 'guest' || v.mode === 'cloud' ? v.mode : null,
       lastUser: v.lastUser && typeof v.lastUser.id === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(v.lastUser.id) ? { id: v.lastUser.id, email: str(v.lastUser.email, 320) } : null,
       v1Handled: v.v1Handled === true,
@@ -1094,7 +1111,7 @@ function toast(message, iconName = 'checkCircle', action) {
 }
 
 /** Promise-based confirmation dialog. Resolves true on confirm. */
-function confirmDialog({ title = 'Are you sure?', message = '', confirmText = 'Delete', cancelText = 'Cancel', tone = 'danger' } = {}) {
+function confirmDialog({ title = t('areYouSure'), message = '', confirmText = t('delete'), cancelText = t('cancel'), tone = 'danger' } = {}) {
   const dlg = $('#confirmModal');
   $('#confirmTitle').textContent = title;
   $('#confirmMessage').textContent = message;
@@ -1154,19 +1171,20 @@ const habitIconHtml = (h) => `<span class="habit-icon" style="--c:${escapeHtml(h
 
 function initials(text) {
   const parts = String(text || '?').trim().split(/[\s@._-]+/).filter(Boolean);
-  return ((parts[0]?.[0] || '?') + (parts.length > 1 ? parts[1][0] : '')).toUpperCase();
+  const first = (s) => Array.from(s)[0] || '';
+  return (first(parts[0] || '?') + (parts.length > 1 ? first(parts[1]) : '')).toUpperCase();
 }
 
 /* =========================================================
    9. Router & header
    ========================================================= */
 const VIEWS = {
-  dashboard: { title: null, subtitle: 'Stay consistent. Small steps every day.' },
-  habits: { title: 'Habits', subtitle: 'Create, edit and organise the habits you track.' },
-  calendar: { title: 'Calendar', subtitle: 'Review any day and fill in what you missed.' },
-  statistics: { title: 'Statistics', subtitle: 'How consistent you have been, in numbers.' },
-  goals: { title: 'Goals', subtitle: 'Longer-term targets with deadlines.' },
-  settings: { title: 'Settings', subtitle: 'Account, preferences and your data.' },
+  dashboard: { title: null, sub: 'subDashboard' },
+  habits: { title: 'navHabits', sub: 'subHabits' },
+  calendar: { title: 'navCalendar', sub: 'subCalendar' },
+  statistics: { title: 'navStatistics', sub: 'subStatistics' },
+  goals: { title: 'navGoals', sub: 'subGoals' },
+  settings: { title: 'navSettings', sub: 'subSettings' },
 };
 
 /** Transient UI state (not persisted). */
@@ -1186,10 +1204,10 @@ const UI = {
 
 function greeting() {
   const h = new Date().getHours();
-  if (h < 5) return 'Good night';
-  if (h < 12) return 'Good morning';
-  if (h < 18) return 'Good afternoon';
-  return 'Good evening';
+  if (h < 5) return t('greetNight');
+  if (h < 12) return t('greetMorning');
+  if (h < 18) return t('greetAfternoon');
+  return t('greetEvening');
 }
 
 function route() {
@@ -1209,13 +1227,13 @@ function renderHeader() {
   const cfg = VIEWS[UI.view];
   const name = displayName();
   $('#headerDate').textContent = fmtLong(today());
-  $('#headerTitle').textContent = cfg.title || (name ? `${greeting()}, ${name}` : greeting());
-  $('#headerSubtitle').textContent = cfg.subtitle;
-  const account = Store.mode === 'cloud' ? (Auth.email || Prefs.data.lastUser?.email || 'Signed in') : 'This device only';
-  $$('[data-bind="name"]').forEach((el) => { el.textContent = name || (Store.mode === 'cloud' ? account : 'You'); });
+  $('#headerTitle').textContent = cfg.title ? t(cfg.title) : (name ? t('greetName', { greeting: greeting(), name }) : greeting());
+  $('#headerSubtitle').textContent = t(cfg.sub);
+  const account = Store.mode === 'cloud' ? (Auth.email || Prefs.data.lastUser?.email || t('signedIn')) : t('deviceOnly');
+  $$('[data-bind="name"]').forEach((el) => { el.textContent = name || (Store.mode === 'cloud' ? account : t('you')); });
   $$('[data-bind="account"]').forEach((el) => { el.textContent = account; });
-  $$('[data-bind="initials"]').forEach((el) => { el.textContent = initials(name || (Store.mode === 'cloud' ? account : 'You')); });
-  document.title = `${cfg.title || 'Dashboard'} · Cadence`;
+  $$('[data-bind="initials"]').forEach((el) => { el.textContent = initials(name || (Store.mode === 'cloud' ? account : t('you'))); });
+  document.title = `${cfg.title ? t(cfg.title) : t('navDashboard')} · Cadence`;
 }
 
 function renderView() {
@@ -1235,29 +1253,24 @@ function renderView() {
     const el = document.createElement('div');
     el.id = 'renderError';
     el.className = 'banner';
-    el.innerHTML = `${iconSpan('alert')}<span>Something went wrong showing this page. Your data is safe — reload, or export a backup from Settings.</span><button class="btn btn-ghost sm" type="button" data-action="reload">Reload</button>`;
+    el.innerHTML = `${iconSpan('alert')}<span>${escapeHtml(t('renderError'))}</span><button class="btn btn-ghost sm" type="button" data-action="reload">${escapeHtml(t('reload'))}</button>`;
     $('#main').prepend(el);
   }
 }
 
-const SYNC_TEXT = {
-  local: 'This device only',
-  synced: 'Synced',
-  syncing: 'Syncing…',
-  offline: 'Offline — saved on device',
-  error: 'Sync problem — retrying',
-  auth: 'Sign in again to sync',
-};
+const SYNC_KEYS = { local: 'syncLocal', synced: 'syncSynced', syncing: 'syncSyncing', offline: 'syncOffline', error: 'syncError', auth: 'syncAuth' };
+const syncText = (status) => t(SYNC_KEYS[status] || 'syncLocal');
+
 function renderSyncStatus() {
   const status = Store.mode === 'cloud' ? Sync.status : 'local';
   const pending = Store.pendingCount();
-  let text = SYNC_TEXT[status];
-  if (status === 'offline' && pending) text = `Offline — ${plural(pending, 'change')} waiting`;
-  const title = status === 'local' ? 'Data is stored in this browser only' : `${text}${Store.lastSyncAt ? ` · last synced ${relativeTime(Store.lastSyncAt)}` : ''}`;
+  let text = syncText(status);
+  if (status === 'offline' && pending) text = t('syncOfflineWaiting', { changes: tn('nChanges', pending) });
+  const title = status === 'local' ? t('syncLocalTitle') : `${text}${Store.lastSyncAt ? ` · ${t('lastSynced', { time: relativeTime(Store.lastSyncAt) })}` : ''}`;
   $$('[data-sync-pill]').forEach((el) => {
     el.dataset.sync = status;
     el.title = title;
-    el.setAttribute('aria-label', `Sync status: ${text}`);
+    el.setAttribute('aria-label', t('syncStatusIs', { text }));
     const label = $('.sync-text', el);
     if (label) label.textContent = text;
   });
@@ -1283,10 +1296,10 @@ function renderDashboard(opts = {}) {
 }
 
 function renderTemplates() {
-  $('#templateGrid').innerHTML = TEMPLATES.map((t, i) => `
+  $('#templateGrid').innerHTML = TEMPLATES.map((tp, i) => `
     <button type="button" class="template" data-action="use-template" data-index="${i}">
-      <span class="habit-icon" style="--c:${HABIT_COLORS[i % HABIT_COLORS.length]}">${iconSpan(t.icon)}</span>
-      <span>${escapeHtml(t.name)}</span>
+      <span class="habit-icon" style="--c:${HABIT_COLORS[i % HABIT_COLORS.length]}">${iconSpan(tp.icon)}</span>
+      <span>${escapeHtml(t(tp.key))}</span>
     </button>`).join('');
 }
 
@@ -1296,13 +1309,13 @@ function renderSummary() {
   $('#todayRing').style.setProperty('--p', todayPct);
   animateNumber($('#statToday'), todayPct);
   $('#statTodayMeta').textContent = td.scheduled
-    ? `${td.done} of ${td.eligible} done${td.skipped ? ` · ${td.skipped} skipped` : ''}`
-    : 'Nothing scheduled today';
+    ? `${t('doneOf', { done: td.done, total: td.eligible })}${td.skipped ? ` · ${t('nSkipped', { n: td.skipped })}` : ''}`
+    : t('nothingScheduledToday');
 
   const st = Stats.streaks();
   animateNumber($('#statStreak'), st.current);
-  $('#statStreakUnit').textContent = st.current === 1 ? 'day' : 'days';
-  $('#statStreakMeta').textContent = st.longest ? `Best: ${plural(st.longest, 'day')}` : 'Complete today to start one';
+  $('#statStreakUnit').textContent = tn('dayUnit', st.current);
+  $('#statStreakMeta').textContent = st.longest ? t('bestDays', { days: tn('nDays', st.longest) }) : t('startStreak');
 
   animateNumber($('#statDone'), td.done);
   $('#statTotal').textContent = td.eligible;
@@ -1315,14 +1328,14 @@ function renderSummary() {
   animateNumber($('#statOverall'), ovPct);
   $('#statOverallBar').style.width = `${ovPct}%`;
   $('#statOverallMeta').textContent = ov.since && ov.eligible
-    ? `${ov.done} of ${ov.eligible} check-ins since ${fmtDate(ov.since)}`
-    : 'Starts with your first check-in';
+    ? t('checkinsSince', { done: ov.done, total: ov.eligible, date: fmtDate(ov.since) })
+    : t('firstCheckin');
 }
 
 function todayCaption() {
   const td = Stats.day(today());
   const wd = fmtDate(today(), { weekday: 'long' });
-  return td.scheduled ? `${td.done} of ${td.eligible} completed · ${wd}` : wd;
+  return td.scheduled ? `${t('completedOf', { done: td.done, total: td.eligible })} · ${wd}` : wd;
 }
 
 function renderToday() {
@@ -1331,7 +1344,7 @@ function renderToday() {
   const habits = Stats.habitsForDate(today());
   $('#todayCaption').textContent = todayCaption();
   if (!habits.length) {
-    list.innerHTML = `<li>${emptyHtml({ iconName: 'sun', title: 'Nothing scheduled today', text: 'Enjoy the rest day, or change which days a habit repeats on in Habits.' })}</li>`;
+    list.innerHTML = `<li>${emptyHtml({ iconName: 'sun', title: t('restTitle'), text: t('restText') })}</li>`;
     return;
   }
   const filtered = habits.filter((h) => {
@@ -1342,8 +1355,8 @@ function renderToday() {
   });
   if (!filtered.length) {
     list.innerHTML = `<li>${UI.todayFilter === 'pending'
-      ? emptyHtml({ iconName: 'checkCircle', title: 'All caught up', text: 'Every habit for today is checked off. Nice work.' })
-      : emptyHtml({ iconName: 'clock', title: 'Nothing completed yet', text: 'Tick a habit to see it here.' })}</li>`;
+      ? emptyHtml({ iconName: 'checkCircle', title: t('caughtUpTitle'), text: t('caughtUpText') })
+      : emptyHtml({ iconName: 'clock', title: t('noneDoneTitle'), text: t('noneDoneText') })}</li>`;
     return;
   }
   list.innerHTML = filtered.map((h) => todayItemHtml(h, tk)).join('');
@@ -1353,24 +1366,26 @@ function todayItemHtml(h, tk) {
   const st = Store.getStatus(tk, h.id);
   const wp = Stats.weekProgress(h);
   const streak = Stats.habitStreak(h).current;
-  const label = st === 'done' ? 'Done' : st === 'skipped' ? 'Skipped' : 'To do';
-  const name = escapeHtml(h.name);
+  const label = st === 'done' ? t('statusDone') : st === 'skipped' ? t('statusSkipped') : t('statusTodo');
+  const rawName = h.name;
+  const name = escapeHtml(rawName);
+  const a = (key) => escapeHtml(t(key, { name: rawName }));
   return `<li class="habit-item ${st ? `is-${st}` : ''}" data-habit="${escapeHtml(h.id)}" style="--c:${escapeHtml(h.color)}">
     <button type="button" class="check ${st === 'done' ? 'checked' : ''}" data-action="toggle-today" data-id="${escapeHtml(h.id)}"
-      role="checkbox" aria-checked="${st === 'done'}" aria-label="Mark ${name} as done">${iconSpan('check')}</button>
+      role="checkbox" aria-checked="${st === 'done'}" aria-label="${a('markDone')}">${iconSpan('check')}</button>
     ${habitIconHtml(h)}
     <div class="habit-info">
       <div class="habit-name">${name}</div>
       ${h.description ? `<div class="habit-desc">${escapeHtml(h.description)}</div>` : ''}
       <div class="habit-progress">
         <div class="bar"><span style="width:${clamp(wp.done / wp.target, 0, 1) * 100}%"></span></div>
-        <span>${wp.done}/${wp.target} this week</span>
-        ${streak ? `<span class="flame" title="${plural(streak, 'day')} in a row">${iconSpan('flame')}${streak}</span>` : ''}
+        <span>${escapeHtml(t('weekProgress', { done: wp.done, target: wp.target }))}</span>
+        ${streak ? `<span class="flame" title="${escapeHtml(t('inARow', { days: tn('nDays', streak) }))}">${iconSpan('flame')}${streak}</span>` : ''}
       </div>
     </div>
-    <span class="status-pill ${st === 'done' ? 'done' : ''}">${label}</span>
+    <span class="status-pill ${st === 'done' ? 'done' : ''}">${escapeHtml(label)}</span>
     <button type="button" class="icon-btn skip-btn ${st === 'skipped' ? 'active' : ''}" data-action="skip-today" data-id="${escapeHtml(h.id)}"
-      title="${st === 'skipped' ? 'Undo skip' : 'Skip today'}" aria-label="${st === 'skipped' ? `Undo skip for ${name}` : `Skip ${name} today`}">${iconSpan('skip')}</button>
+      title="${escapeHtml(st === 'skipped' ? t('undoSkip') : t('skipToday'))}" aria-label="${st === 'skipped' ? a('undoSkipFor') : a('skipNameToday')}">${iconSpan('skip')}</button>
   </li>`;
 }
 
@@ -1396,11 +1411,12 @@ function patchTodayItem(id, pop) {
 
 function weekCellHtml(h, d, tk) {
   const key = toKey(d);
-  if (key > tk) return '<td><span class="cell locked" title="Future"></span></td>';
-  if (!Stats.isScheduled(h, d, key)) return '<td><span class="cell off" title="Not scheduled"></span></td>';
+  if (key > tk) return `<td><span class="cell locked" title="${escapeHtml(t('future'))}"></span></td>`;
+  if (!Stats.isScheduled(h, d, key)) return `<td><span class="cell off" title="${escapeHtml(t('notScheduled'))}"></span></td>`;
   const st = Store.getStatus(key, h.id);
   const cls = ['cell', st || '', key === tk ? 'today' : ''].join(' ');
-  const label = escapeHtml(`${h.name}, ${fmtDate(d, { weekday: 'long', month: 'short', day: 'numeric' })}: ${st || 'not done'}`);
+  const stText = st === 'done' ? t('statusDone') : st === 'skipped' ? t('statusSkipped') : t('statusNotDone');
+  const label = escapeHtml(`${h.name}, ${fmtDate(d, { weekday: 'long', month: 'short', day: 'numeric' })}: ${stText}`);
   return `<td><button type="button" class="${cls}" data-action="cycle" data-id="${escapeHtml(h.id)}" data-date="${key}" aria-label="${label}" title="${label}">${st === 'skipped' ? iconSpan('minus') : iconSpan('check')}</button></td>`;
 }
 
@@ -1414,14 +1430,14 @@ function renderWeekTracker() {
 
   const habits = Store.habits.filter((h) => h.active || days.some((d) => Stats.isScheduled(h, d)));
   if (!habits.length) {
-    wrap.innerHTML = emptyHtml({ iconName: 'calendar', title: 'No active habits this week', text: 'Resume a paused habit or create a new one.' });
+    wrap.innerHTML = emptyHtml({ iconName: 'calendar', title: t('noActiveWeek'), text: t('noActiveWeekText') });
     return;
   }
-  const head = days.map((d) => `<th class="${toKey(d) === tk ? 'is-today' : ''}">${DAY_SHORT[d.getDay()]}<span class="dnum">${d.getDate()}</span></th>`).join('');
+  const head = days.map((d) => `<th class="${toKey(d) === tk ? 'is-today' : ''}">${dayShort(d.getDay())}<span class="dnum">${d.getDate()}</span></th>`).join('');
   const rows = habits.map((h) => {
     const wp = Stats.weekProgress(h, days[0]);
     return `<tr class="${h.active ? '' : 'row-paused'}">
-      <td><div class="row-habit">${habitIconHtml(h)}<div style="min-width:0"><div class="name">${escapeHtml(h.name)}</div><div class="sub">${h.active ? `${wp.done}/${wp.target} this week` : 'Paused'}</div></div></div></td>
+      <td><div class="row-habit">${habitIconHtml(h)}<div style="min-width:0"><div class="name">${escapeHtml(h.name)}</div><div class="sub">${escapeHtml(h.active ? t('weekProgress', { done: wp.done, target: wp.target }) : t('paused'))}</div></div></div></td>
       ${days.map((d) => weekCellHtml(h, d, tk)).join('')}
     </tr>`;
   }).join('');
@@ -1430,8 +1446,8 @@ function renderWeekTracker() {
     return `<td><span class="day-rate">${toKey(d) > tk || s.rate === null ? '—' : `${pct(s.rate)}%`}</span></td>`;
   }).join('');
   wrap.innerHTML = `<table class="week-table">
-    <thead><tr><th>Habit</th>${head}</tr></thead>
-    <tbody>${rows}<tr><td><span class="day-rate">Daily completion</span></td>${foot}</tr></tbody>
+    <thead><tr><th>${escapeHtml(t('habit'))}</th>${head}</tr></thead>
+    <tbody>${rows}<tr><td><span class="day-rate">${escapeHtml(t('dailyCompletion'))}</span></td>${foot}</tr></tbody>
   </table>`;
 }
 
@@ -1440,10 +1456,10 @@ function renderStreaks() {
   animateNumber($('#streakCurrent'), st.current);
   animateNumber($('#streakLongest'), st.longest);
   animateNumber($('#streakDays'), st.successDays);
-  $('#streakCurrent').nextElementSibling.textContent = st.current === 1 ? 'day' : 'days';
-  $('#streakLongest').nextElementSibling.textContent = st.longest === 1 ? 'day' : 'days';
+  $('#streakCurrent').nextElementSibling.textContent = tn('dayUnit', st.current);
+  $('#streakLongest').nextElementSibling.textContent = tn('dayUnit', st.longest);
   const thr = Stats.settings().streakThreshold;
-  $('#streakRule').textContent = thr >= 100 ? 'A day counts when all its habits are done' : `A day counts when at least ${thr}% of its habits are done`;
+  $('#streakRule').textContent = thr >= 100 ? t('ruleAll') : t('ruleAtLeast', { n: thr });
   // Show real history only: from the first habit's week, at least 12 and at most 26 weeks
   const first = Stats.firstDate() || today();
   renderHeatmap($('#heatmap'), clamp(Math.ceil((diffDays(first, today()) + 1) / 7) + 1, 12, 26));
@@ -1452,28 +1468,30 @@ function renderStreaks() {
 /** GitHub-style heatmap: columns are weeks, rows are weekdays. Keyboard: arrows move, Enter opens the day. */
 function renderHeatmap(container, weeks) {
   const ws = Stats.settings().weekStart;
-  const t = today();
-  const tk = toKey(t);
-  const start = addDays(startOfWeek(t, ws), -(weeks - 1) * 7);
+  const tday = today();
+  const tk = toKey(tday);
+  const start = addDays(startOfWeek(tday, ws), -(weeks - 1) * 7);
   const cells = [];
   const months = [];
   let lastMonth = -1;
   for (let w = 0; w < weeks; w++) {
     const weekStart = addDays(start, w * 7);
     const m = weekStart.getMonth();
-    months.push(m !== lastMonth ? `<span>${MONTH_SHORT[m]}</span>` : '<span></span>');
+    months.push(m !== lastMonth ? `<span>${monthShort(m)}</span>` : '<span></span>');
     lastMonth = m;
     for (let i = 0; i < 7; i++) {
       const d = addDays(weekStart, i);
       const key = toKey(d);
       if (key > tk) { cells.push('<i class="hm future" aria-hidden="true"></i>'); continue; }
       const s = Stats.day(d);
-      const tip = s.rate === null ? `${fmtDate(d)}: nothing scheduled` : `${fmtDate(d)}: ${s.done} of ${s.eligible} done (${pct(s.rate)}%)`;
+      const tip = escapeHtml(s.rate === null
+        ? t('heatNothing', { date: fmtDate(d) })
+        : t('heatTip', { date: fmtDate(d), done: s.done, total: s.eligible, pct: pct(s.rate) }));
       cells.push(`<i class="hm ${heatLevel(s.rate)} ${key === tk ? 'is-today' : ''}" data-date="${key}" role="button" tabindex="${key === tk ? 0 : -1}" title="${tip}" aria-label="${tip}"></i>`);
     }
   }
-  const dayLabels = Array.from({ length: 7 }, (_, i) => `<span>${i % 2 === 0 ? DAY_SHORT[(ws + i) % 7] : ''}</span>`).join('');
-  container.innerHTML = `<div class="heatmap"><div class="hm-months" aria-hidden="true">${months.join('')}</div><div class="hm-days" aria-hidden="true">${dayLabels}</div><div class="hm-grid" role="group" aria-label="Daily completion heatmap">${cells.join('')}</div></div>`;
+  const dayLabels = Array.from({ length: 7 }, (_, i) => `<span>${i % 2 === 0 ? dayShort((ws + i) % 7) : ''}</span>`).join('');
+  container.innerHTML = `<div class="heatmap"><div class="hm-months" aria-hidden="true">${months.join('')}</div><div class="hm-days" aria-hidden="true">${dayLabels}</div><div class="hm-grid" role="group" aria-label="${escapeHtml(t('heatmapAria'))}">${cells.join('')}</div></div>`;
   container.scrollLeft = container.scrollWidth;
 }
 
@@ -1482,25 +1500,25 @@ function renderGoalsPreview() {
   const goals = Store.goals.map((g) => ({ g, p: Stats.goalProgress(g) }))
     .sort((a, b) => Number(a.p.completed) - Number(b.p.completed) || (a.p.daysLeft ?? 9999) - (b.p.daysLeft ?? 9999));
   const active = goals.filter((x) => !x.p.completed).length;
-  $('#goalsCaption').textContent = goals.length ? `${active} in progress · ${goals.length - active} completed` : 'Long-term targets';
+  $('#goalsCaption').textContent = goals.length ? t('goalsCaption', { active, done: goals.length - active }) : t('longTermTargets');
   if (!goals.length) {
-    wrap.innerHTML = emptyHtml({ iconName: 'target', title: 'No goals yet', text: 'Set a target with a deadline, like "Read 10 books".', actionLabel: 'Add a goal', action: 'add-goal' });
+    wrap.innerHTML = emptyHtml({ iconName: 'target', title: t('noGoals'), text: t('noGoalsText'), actionLabel: t('addGoal'), action: 'add-goal' });
     return;
   }
   wrap.innerHTML = goals.slice(0, 4).map(({ g, p }) => `
     <div class="goal-mini">
       <div class="top"><strong>${escapeHtml(g.title)}</strong><span>${p.current} / ${p.target}${g.unit ? ` ${escapeHtml(g.unit)}` : ''}</span></div>
       <div class="bar"><span style="width:${p.ratio * 100}%"></span></div>
-      <div class="meta">${goalDeadlineText(p)}</div>
+      <div class="meta">${escapeHtml(goalDeadlineText(p))}</div>
     </div>`).join('');
 }
 
 function goalDeadlineText(p) {
-  if (p.completed) return 'Completed';
-  if (p.daysLeft === null) return 'No deadline';
-  if (p.daysLeft < 0) return `Overdue by ${plural(-p.daysLeft, 'day')}`;
-  if (p.daysLeft === 0) return 'Due today';
-  return `${plural(p.daysLeft, 'day')} left`;
+  if (p.completed) return t('goalCompleted');
+  if (p.daysLeft === null) return t('noDeadline');
+  if (p.daysLeft < 0) return t('overdueBy', { days: tn('nDays', -p.daysLeft) });
+  if (p.daysLeft === 0) return t('dueToday');
+  return t('daysLeft', { days: tn('nDays', p.daysLeft) });
 }
 
 /* ---------- Habits page ---------- */
@@ -1509,7 +1527,7 @@ function renderHabits() {
   const q = UI.habitQuery.trim().toLowerCase();
   const all = Store.habits;
   if (!all.length) {
-    grid.innerHTML = `<div class="grid-empty card">${emptyHtml({ title: 'No habits yet', text: 'Start small — one habit you can do every day is plenty.', actionLabel: 'Create your first habit', action: 'add-habit' })}</div>`;
+    grid.innerHTML = `<div class="grid-empty card">${emptyHtml({ title: t('noHabits'), text: t('noHabitsText'), actionLabel: t('createFirstHabit'), action: 'add-habit' })}</div>`;
     return;
   }
   const habits = all.filter((h) => {
@@ -1518,39 +1536,39 @@ function renderHabits() {
     return !q || h.name.toLowerCase().includes(q) || h.description.toLowerCase().includes(q);
   });
   if (!habits.length) {
-    grid.innerHTML = `<div class="grid-empty card">${emptyHtml({ iconName: 'search', title: 'No matching habits', text: 'Try a different search or filter.' })}</div>`;
+    grid.innerHTML = `<div class="grid-empty card">${emptyHtml({ iconName: 'search', title: t('noMatch'), text: t('noMatchText') })}</div>`;
     return;
   }
-  const t = today();
-  const from30 = addDays(t, -29);
+  const tday = today();
+  const from30 = addDays(tday, -29);
   const order = ALL_DAYS.map((i) => (Stats.settings().weekStart + i) % 7);
   grid.innerHTML = habits.map((h) => {
     const streak = Stats.habitStreak(h);
-    const r = Stats.habitRange(h, from30, t);
+    const r = Stats.habitRange(h, from30, tday);
     const wp = Stats.weekProgress(h);
     const id = escapeHtml(h.id);
-    const name = escapeHtml(h.name);
+    const a = (key) => escapeHtml(t(key, { name: h.name }));
     return `<article class="card habit-card ${h.active ? '' : 'paused'}" style="--c:${escapeHtml(h.color)}">
       <div class="top">
         ${habitIconHtml(h)}
         <div class="habit-info">
-          <h3>${name}</h3>
+          <h3>${escapeHtml(h.name)}</h3>
           <div class="habit-desc">${escapeHtml(h.description || freqLabel(h.days))}</div>
         </div>
         <div class="card-menu">
-          <button class="icon-btn" type="button" data-action="edit-habit" data-id="${id}" aria-label="Edit ${name}">${iconSpan('edit')}</button>
-          <button class="icon-btn danger" type="button" data-action="delete-habit" data-id="${id}" aria-label="Delete ${name}">${iconSpan('trash')}</button>
+          <button class="icon-btn" type="button" data-action="edit-habit" data-id="${id}" aria-label="${a('editName')}">${iconSpan('edit')}</button>
+          <button class="icon-btn danger" type="button" data-action="delete-habit" data-id="${id}" aria-label="${a('deleteName')}">${iconSpan('trash')}</button>
         </div>
       </div>
-      <div class="days" aria-label="Repeats on ${freqLabel(h.days)}">${order.map((d) => `<span class="${h.days.includes(d) ? 'on' : ''}">${DAY_LETTER[d]}</span>`).join('')}</div>
+      <div class="days" aria-label="${escapeHtml(t('repeatsOn', { days: freqLabel(h.days) }))}">${order.map((d) => `<span class="${h.days.includes(d) ? 'on' : ''}">${dayLetter(d)}</span>`).join('')}</div>
       <div class="mini-stats">
-        <div><span>Streak</span><strong>${streak.current}</strong></div>
-        <div><span>30-day rate</span><strong>${r.rate === null ? '—' : `${pct(r.rate)}%`}</strong></div>
-        <div><span>This week</span><strong>${wp.done}/${wp.target}</strong></div>
+        <div><span>${escapeHtml(t('streak'))}</span><strong>${streak.current}</strong></div>
+        <div><span>${escapeHtml(t('rate30'))}</span><strong>${r.rate === null ? '—' : `${pct(r.rate)}%`}</strong></div>
+        <div><span>${escapeHtml(t('thisWeek'))}</span><strong>${wp.done}/${wp.target}</strong></div>
       </div>
       <div class="foot">
-        <label class="switch-label"><input type="checkbox" class="switch-input" data-action="toggle-active" data-id="${id}" ${h.active ? 'checked' : ''} />${h.active ? 'Active' : 'Paused'}</label>
-        <span class="muted small">Best streak ${streak.longest}</span>
+        <label class="switch-label"><input type="checkbox" class="switch-input" data-action="toggle-active" data-id="${id}" ${h.active ? 'checked' : ''} />${escapeHtml(h.active ? t('active') : t('paused'))}</label>
+        <span class="muted small">${escapeHtml(t('bestStreakN', { n: streak.longest }))}</span>
       </div>
     </article>`;
   }).join('');
@@ -1558,18 +1576,18 @@ function renderHabits() {
 
 function freqLabel(days) {
   const s = days.join(',');
-  if (s === '0,1,2,3,4,5,6') return 'Every day';
-  if (s === '1,2,3,4,5') return 'Weekdays';
-  if (s === '0,6') return 'Weekends';
-  return days.map((d) => DAY_SHORT[d]).join(', ');
+  if (s === '0,1,2,3,4,5,6') return t('everyDay');
+  if (s === '1,2,3,4,5') return t('weekdays');
+  if (s === '0,6') return t('weekends');
+  return days.map((d) => dayShort(d)).join(', ');
 }
 
 /* ---------- Calendar ---------- */
 function renderCalendar() {
   const ws = Stats.settings().weekStart;
   const m = UI.calMonth;
-  $('#calTitle').textContent = `${MONTH_LONG[m.getMonth()]} ${m.getFullYear()}`;
-  $('#calWeekdays').innerHTML = ALL_DAYS.map((i) => `<span>${DAY_SHORT[(ws + i) % 7]}</span>`).join('');
+  $('#calTitle').textContent = m.toLocaleDateString(Lang.locale(), { month: 'long', year: 'numeric' });
+  $('#calWeekdays').innerHTML = ALL_DAYS.map((i) => `<span>${dayShort((ws + i) % 7)}</span>`).join('');
 
   const first = startOfWeek(m, ws);
   const lastOfMonth = new Date(m.getFullYear(), m.getMonth() + 1, 0);
@@ -1585,7 +1603,8 @@ function renderCalendar() {
     const doneHabits = future ? [] : s.habits.filter((h) => Store.getStatus(key, h.id) === 'done');
     const lvl = future ? 'none' : heatLevel(s.rate);
     const cls = ['cal-day', outside ? 'outside' : '', future ? 'future' : '', key === tk ? 'is-today' : '', key === UI.calSelected ? 'selected' : ''].join(' ');
-    html += `<button type="button" class="${cls}" data-action="cal-select" data-date="${key}" aria-pressed="${key === UI.calSelected}" aria-label="${fmtLong(d)}${s.rate !== null && !future ? `, ${pct(s.rate)}% complete` : ''}">
+    const aria = escapeHtml(`${fmtLong(d)}${s.rate !== null && !future ? `, ${t('pctComplete', { pct: pct(s.rate) })}` : ''}`);
+    html += `<button type="button" class="${cls}" data-action="cal-select" data-date="${key}" aria-pressed="${key === UI.calSelected}" aria-label="${aria}">
       <span class="num"><b>${d.getDate()}</b>${!future && s.rate !== null ? `<span class="rate">${pct(s.rate)}%</span>` : ''}</span>
       <span>
         <span class="dots">${doneHabits.slice(0, 8).map((h) => `<i style="--c:${escapeHtml(h.color)}"></i>`).join('')}</span>
@@ -1611,24 +1630,27 @@ function renderDayPanel() {
 
   const item = (h) => {
     const st = Store.getStatus(key, h.id);
-    const name = escapeHtml(h.name);
     const id = escapeHtml(h.id);
-    return `<li>${habitIconHtml(h)}<span class="name">${name}</span>
-      ${future ? '' : `<button type="button" class="icon-btn skip-btn ${st === 'skipped' ? 'active' : ''}" data-action="day-skip" data-id="${id}" aria-label="${st === 'skipped' ? `Undo skip for ${name}` : `Skip ${name}`}" title="${st === 'skipped' ? 'Undo skip' : 'Skip'}">${iconSpan('skip')}</button>
-      <button type="button" class="check ${st === 'done' ? 'checked' : ''}" data-action="day-toggle" data-id="${id}" role="checkbox" aria-checked="${st === 'done'}" aria-label="Mark ${name} done">${iconSpan('check')}</button>`}
+    const a = (k) => escapeHtml(t(k, { name: h.name }));
+    return `<li>${habitIconHtml(h)}<span class="name">${escapeHtml(h.name)}</span>
+      ${future ? '' : `<button type="button" class="icon-btn skip-btn ${st === 'skipped' ? 'active' : ''}" data-action="day-skip" data-id="${id}" aria-label="${st === 'skipped' ? a('undoSkipFor') : a('skipName')}" title="${escapeHtml(st === 'skipped' ? t('undoSkip') : t('skip'))}">${iconSpan('skip')}</button>
+      <button type="button" class="check ${st === 'done' ? 'checked' : ''}" data-action="day-toggle" data-id="${id}" role="checkbox" aria-checked="${st === 'done'}" aria-label="${a('markNameDone')}">${iconSpan('check')}</button>`}
     </li>`;
   };
-  const section = (title, list) => (list.length ? `<div class="day-section"><h3>${title} · ${list.length}</h3><ul class="day-list">${list.map(item).join('')}</ul></div>` : '');
+  const section = (titleKey, list) => (list.length ? `<div class="day-section"><h3>${escapeHtml(t(titleKey))} · ${list.length}</h3><ul class="day-list">${list.map(item).join('')}</ul></div>` : '');
 
   let body;
   if (!s.scheduled) {
-    body = emptyHtml({ iconName: 'sun', title: future ? 'Nothing planned' : 'Nothing scheduled', text: 'No habits were scheduled for this day.' });
+    body = emptyHtml({ iconName: 'sun', title: future ? t('nothingPlanned') : t('nothingScheduled'), text: t('noHabitsThisDay') });
   } else if (future) {
-    body = `<div class="day-section"><h3>Planned · ${s.scheduled}</h3><ul class="day-list">${s.habits.map(item).join('')}</ul></div><p class="muted small" style="margin-top:12px">Future days can't be checked off yet.</p>`;
+    body = `<div class="day-section"><h3>${escapeHtml(t('planned'))} · ${s.scheduled}</h3><ul class="day-list">${s.habits.map(item).join('')}</ul></div><p class="muted small" style="margin-top:12px">${escapeHtml(t('futureNote'))}</p>`;
   } else {
-    body = section('Completed', done) + section('Not done', pending) + section('Skipped', skipped);
+    body = section('secCompleted', done) + section('secNotDone', pending) + section('secSkipped', skipped);
   }
 
+  const summary = s.scheduled
+    ? `${t('completedOf', { done: s.done, total: s.eligible })}${s.skipped ? ` · ${t('nSkipped', { n: s.skipped })}` : ''}`
+    : t('noHabitsScheduled');
   panel.innerHTML = `
     <div class="head">
       <div class="ring" style="--p:${future ? 0 : r ?? 0}">
@@ -1636,8 +1658,8 @@ function renderDayPanel() {
         <b>${future || r === null ? '—' : `${r}%`}</b>
       </div>
       <div>
-        <h2>${fmtDate(d, { weekday: 'long', month: 'long', day: 'numeric' })}</h2>
-        <p class="muted small">${s.scheduled ? `${s.done} of ${s.eligible} completed${s.skipped ? ` · ${s.skipped} skipped` : ''}` : 'No habits scheduled'}</p>
+        <h2>${escapeHtml(fmtDate(d, { weekday: 'long', month: 'long', day: 'numeric' }))}</h2>
+        <p class="muted small">${escapeHtml(summary)}</p>
       </div>
     </div>
     ${body}`;
@@ -1647,41 +1669,41 @@ function renderDayPanel() {
 const BEST_HABIT_MIN = 5; // check-ins needed before a habit can be "best"
 
 function renderStatistics() {
-  const t = today();
+  const tday = today();
   const n = UI.statsRange;
-  const start = addDays(t, -(n - 1));
-  $('#statsRangeLabel').textContent = `${fmtDate(start)} – ${fmtDate(t)}`;
+  const start = addDays(tday, -(n - 1));
+  $('#statsRangeLabel').textContent = `${fmtDate(start)} – ${fmtDate(tday)}`;
   $$('#statsRange button').forEach((b) => b.classList.toggle('active', Number(b.dataset.range) === n));
 
-  const ws = startOfWeek(t, Stats.settings().weekStart);
-  const weekAgg = Stats.aggregate(Stats.range(ws, t));
-  const monthAgg = Stats.aggregate(Stats.range(new Date(t.getFullYear(), t.getMonth(), 1), t));
+  const ws = startOfWeek(tday, Stats.settings().weekStart);
+  const weekAgg = Stats.aggregate(Stats.range(ws, tday));
+  const monthAgg = Stats.aggregate(Stats.range(new Date(tday.getFullYear(), tday.getMonth(), 1), tday));
   const streaks = Stats.streaks();
   const habits = Store.habits;
 
-  const perHabit = habits.map((h) => ({ h, r: Stats.habitRange(h, start, t), s: Stats.habitStreak(h) }));
+  const perHabit = habits.map((h) => ({ h, r: Stats.habitRange(h, start, tday), s: Stats.habitStreak(h) }));
   const best = perHabit.filter((x) => x.r.rate !== null && x.r.eligible >= BEST_HABIT_MIN)
     .sort((a, b) => b.r.rate - a.r.rate || b.r.done - a.r.done)[0];
   const consistent = perHabit.filter((x) => x.s.current > 0 || x.s.longest > 0)
     .sort((a, b) => b.s.current - a.s.current || b.s.longest - a.s.longest)[0];
 
-  const kpi = (k, v, m) => `<article class="card kpi"><span class="k">${k}</span>${v}<span class="m">${m}</span></article>`;
-  const num = (value, unit = '') => `<span class="v">${value}${unit ? `<small>${unit}</small>` : ''}</span>`;
+  const kpi = (k, v, m) => `<article class="card kpi"><span class="k">${escapeHtml(t(k))}</span>${v}<span class="m">${escapeHtml(m)}</span></article>`;
+  const num = (value, unit = '') => `<span class="v">${value}${unit ? `<small>${escapeHtml(unit)}</small>` : ''}</span>`;
   const rateNum = (agg) => (agg.rate === null ? num('—') : num(pct(agg.rate), '%'));
   const habitV = (x) => (x ? `<span class="v text">${habitIconHtml(x.h)}<span>${escapeHtml(x.h.name)}</span></span>` : '<span class="v text"><span>—</span></span>');
 
   $('#kpiGrid').innerHTML = [
-    kpi('Weekly completion', rateNum(weekAgg), `${weekAgg.done} of ${weekAgg.eligible} this week`),
-    kpi('Monthly completion', rateNum(monthAgg), `${monthAgg.done} of ${monthAgg.eligible} in ${MONTH_LONG[t.getMonth()]}`),
-    kpi('Current streak', num(streaks.current, streaks.current === 1 ? 'day' : 'days'), `Longest: ${plural(streaks.longest, 'day')}`),
-    kpi('Total completed', num(Stats.totalCompleted()), 'All-time check-ins'),
-    kpi('Best habit', habitV(best), best ? `${pct(best.r.rate)}% completion, last ${n} days` : `Needs ${BEST_HABIT_MIN}+ check-ins in this range`),
-    kpi('Most consistent', habitV(consistent), consistent ? `${plural(consistent.s.current, 'day')} streak · best ${consistent.s.longest}` : 'Build a streak to see this'),
-    kpi('Longest streak', num(streaks.longest, streaks.longest === 1 ? 'day' : 'days'), `${plural(streaks.successDays, 'successful day')} total`),
-    kpi('Active habits', num(habits.filter((h) => h.active).length, `/ ${habits.length}`), `${habits.filter((h) => !h.active).length} paused`),
+    kpi('weeklyCompletion', rateNum(weekAgg), t('doneOfThisWeek', { done: weekAgg.done, total: weekAgg.eligible })),
+    kpi('monthlyCompletion', rateNum(monthAgg), t('doneOfInMonth', { done: monthAgg.done, total: monthAgg.eligible, month: monthLong(tday.getMonth()) })),
+    kpi('currentStreak', num(streaks.current, tn('dayUnit', streaks.current)), t('longestN', { days: tn('nDays', streaks.longest) })),
+    kpi('totalCompleted', num(Stats.totalCompleted()), t('allTimeCheckins')),
+    kpi('bestHabit', habitV(best), best ? t('bestHabitMeta', { pct: pct(best.r.rate), n }) : t('needsMin', { n: BEST_HABIT_MIN })),
+    kpi('mostConsistent', habitV(consistent), consistent ? t('consistentMeta', { days: tn('nDays', consistent.s.current), n: consistent.s.longest }) : t('buildStreak')),
+    kpi('longestStreak', num(streaks.longest, tn('dayUnit', streaks.longest)), tn('successfulTotal', streaks.successDays)),
+    kpi('activeHabits', num(habits.filter((h) => h.active).length, `/ ${habits.length}`), t('nPaused', { n: habits.filter((h) => !h.active).length })),
   ].join('');
 
-  const days = Stats.range(start, t);
+  const days = Stats.range(start, tday);
   renderTrendChart(days);
   renderHabitChart(perHabit);
   renderDonutChart(Stats.aggregate(days));
@@ -1692,40 +1714,43 @@ function renderGoals() {
   const grid = $('#goalGrid');
   const all = Store.goals.map((g) => ({ g, p: Stats.goalProgress(g) }));
   if (!all.length) {
-    grid.innerHTML = `<div class="grid-empty card">${emptyHtml({ iconName: 'target', title: 'No goals yet', text: 'Goals give your habits a direction. Try "Read 10 books" with a deadline.', actionLabel: 'Create your first goal', action: 'add-goal' })}</div>`;
+    grid.innerHTML = `<div class="grid-empty card">${emptyHtml({ iconName: 'target', title: t('noGoals'), text: t('goalsIntro'), actionLabel: t('createFirstGoal'), action: 'add-goal' })}</div>`;
     return;
   }
   const list = all.filter(({ p }) => UI.goalFilter === 'all' || (UI.goalFilter === 'done' ? p.completed : !p.completed))
     .sort((a, b) => Number(a.p.completed) - Number(b.p.completed) || (a.p.daysLeft ?? 9999) - (b.p.daysLeft ?? 9999));
   if (!list.length) {
-    grid.innerHTML = `<div class="grid-empty card">${emptyHtml({ iconName: 'target', title: UI.goalFilter === 'done' ? 'No completed goals yet' : 'Nothing in progress', text: UI.goalFilter === 'done' ? 'Finished goals will be collected here.' : 'All your goals are complete.' })}</div>`;
+    const doneTab = UI.goalFilter === 'done';
+    grid.innerHTML = `<div class="grid-empty card">${emptyHtml({ iconName: 'target', title: doneTab ? t('noCompletedGoals') : t('nothingInProgress'), text: doneTab ? t('finishedGoalsHere') : t('allGoalsComplete') })}</div>`;
     return;
   }
   grid.innerHTML = list.map(({ g, p }) => {
     const habit = g.mode === 'habit' ? Store.getHabit(g.habitId) : null;
     const id = escapeHtml(g.id);
-    const statusTag = p.completed ? `<span class="tag good">${iconSpan('check')}Completed</span>`
-      : p.overdue ? `<span class="tag bad">${iconSpan('clock')}${goalDeadlineText(p)}</span>`
-      : p.daysLeft !== null ? `<span class="tag ${p.daysLeft <= 7 ? 'warn' : ''}">${iconSpan('clock')}${goalDeadlineText(p)}</span>`
-      : '<span class="tag">No deadline</span>';
+    const deadline = escapeHtml(goalDeadlineText(p));
+    const statusTag = p.completed ? `<span class="tag good">${iconSpan('check')}${escapeHtml(t('goalCompleted'))}</span>`
+      : p.overdue ? `<span class="tag bad">${iconSpan('clock')}${deadline}</span>`
+      : p.daysLeft !== null ? `<span class="tag ${p.daysLeft <= 7 ? 'warn' : ''}">${iconSpan('clock')}${deadline}</span>`
+      : `<span class="tag">${escapeHtml(t('noDeadline'))}</span>`;
+    const a = (k) => escapeHtml(t(k, { name: g.title }));
     return `<article class="card goal-card">
       <div class="row">
         <div style="min-width:0">
           <h3>${escapeHtml(g.title)}</h3>
-          <div class="tags">${statusTag}${habit ? `<span class="tag">${iconSpan('link')}${escapeHtml(habit.name)}</span>` : ''}${g.deadline ? `<span class="tag">${fmtDate(fromKey(g.deadline), { month: 'short', day: 'numeric', year: 'numeric' })}</span>` : ''}</div>
+          <div class="tags">${statusTag}${habit ? `<span class="tag">${iconSpan('link')}${escapeHtml(habit.name)}</span>` : ''}${g.deadline ? `<span class="tag">${escapeHtml(fmtDate(fromKey(g.deadline), { month: 'short', day: 'numeric', year: 'numeric' }))}</span>` : ''}</div>
         </div>
         <div class="card-menu">
-          <button class="icon-btn" type="button" data-action="edit-goal" data-id="${id}" aria-label="Edit goal ${escapeHtml(g.title)}">${iconSpan('edit')}</button>
-          <button class="icon-btn danger" type="button" data-action="delete-goal" data-id="${id}" aria-label="Delete goal ${escapeHtml(g.title)}">${iconSpan('trash')}</button>
+          <button class="icon-btn" type="button" data-action="edit-goal" data-id="${id}" aria-label="${a('editGoalName')}">${iconSpan('edit')}</button>
+          <button class="icon-btn danger" type="button" data-action="delete-goal" data-id="${id}" aria-label="${a('deleteGoalName')}">${iconSpan('trash')}</button>
         </div>
       </div>
       <div class="goal-num"><strong>${p.current} <small>/ ${p.target}${g.unit ? ` ${escapeHtml(g.unit)}` : ''}</small></strong><span class="pct">${Math.round(p.ratio * 100)}%</span></div>
       <div class="bar"><span style="width:${p.ratio * 100}%"></span></div>
       <div class="goal-actions">
         ${g.mode === 'habit'
-          ? `<span class="muted small">Updates automatically when you complete ${habit ? escapeHtml(habit.name) : 'the habit'}</span>`
-          : `<button class="btn btn-ghost sm" type="button" data-action="goal-dec" data-id="${id}" aria-label="Decrease progress" ${p.current <= 0 ? 'disabled' : ''}>${iconSpan('minus')}</button>
-             <button class="btn btn-ghost sm" type="button" data-action="goal-inc" data-id="${id}">${iconSpan('plus')}Add 1</button>`}
+          ? `<span class="muted small">${escapeHtml(t('updatesAuto', { name: habit ? habit.name : t('theHabit') }))}</span>`
+          : `<button class="btn btn-ghost sm" type="button" data-action="goal-dec" data-id="${id}" aria-label="${escapeHtml(t('decreaseProgress'))}" ${p.current <= 0 ? 'disabled' : ''}>${iconSpan('minus')}</button>
+             <button class="btn btn-ghost sm" type="button" data-action="goal-inc" data-id="${id}">${iconSpan('plus')}${escapeHtml(t('addOne'))}</button>`}
       </div>
     </article>`;
   }).join('');
@@ -1738,15 +1763,15 @@ function renderSettings() {
   if (document.activeElement !== nameInput) nameInput.value = p.name;
   $('#weekStart').value = String(p.weekStart);
   const thr = $('#streakThreshold');
-  if (![...thr.options].some((o) => o.value === String(p.streakThreshold))) thr.add(new Option(`at least ${p.streakThreshold}% of its habits are done`, p.streakThreshold));
+  const thresholds = new Set([50, 80, 100, p.streakThreshold]);
+  thr.innerHTML = [...thresholds].sort((a, b) => a - b)
+    .map((v) => `<option value="${v}">${escapeHtml(v >= 100 ? t('thresholdAll') : t('thresholdAtLeast', { n: v }))}</option>`).join('');
   thr.value = String(p.streakThreshold);
   $$('#themeChoice button').forEach((b) => b.classList.toggle('active', b.dataset.themeChoice === Prefs.data.theme));
-  $('#dataLead').textContent = Store.mode === 'cloud'
-    ? 'Saved on this device and synced to your account. A backup file is still handy to keep.'
-    : 'Stored in this browser only. Export a backup to move it elsewhere, or sign in to sync across devices.';
+  $('#dataLead').textContent = Store.mode === 'cloud' ? t('dataLeadCloud') : t('dataLeadLocal');
   const kb = (LocalDB.bytes(NS_PREFIX + Store.ns) / 1024).toFixed(1);
   const s = Store.state;
-  $('#storageInfo').textContent = `${plural(s.habits.length, 'habit')}, ${plural(s.goals.length, 'goal')}, ${plural(countLogs(s.logs), 'check-in')} · ${kb} KB on this device`;
+  $('#storageInfo').textContent = t('storageLine', { habits: tn('nHabits', s.habits.length), goals: tn('nGoals', s.goals.length), checkins: tn('nCheckins', countLogs(s.logs)), kb });
   renderAccountCard();
 }
 
@@ -1754,33 +1779,34 @@ function renderAccountCard() {
   const card = $('#accountCard');
   if (!card) return;
   const configured = Boolean(Cloud.auth);
+  const T = (k, v) => escapeHtml(t(k, v));
   if (Store.mode === 'cloud') {
     const email = escapeHtml(Auth.email || Prefs.data.lastUser?.email || '');
     const pending = Store.pendingCount();
     card.innerHTML = `
-      <div class="card-head"><h2>Account</h2></div>
-      <div class="account-row"><span class="avatar">${escapeHtml(initials(Store.profile.name || email))}</span><div class="who"><strong>${email}</strong><span class="muted small">Signed in · syncs across devices</span></div></div>
-      <div class="sync-line" data-sync-pill data-sync="${Sync.status}"><span class="sync-dot"></span><span>${escapeHtml(SYNC_TEXT[Sync.status] || '')}${pending ? ` · ${plural(pending, 'change')} waiting` : ''} · last synced ${escapeHtml(relativeTime(Store.lastSyncAt))}</span></div>
+      <div class="card-head"><h2>${T('account')}</h2></div>
+      <div class="account-row"><span class="avatar">${escapeHtml(initials(Store.profile.name || email))}</span><div class="who"><strong>${email}</strong><span class="muted small">${T('signedInSyncs')}</span></div></div>
+      <div class="sync-line" data-sync-pill data-sync="${Sync.status}"><span class="sync-dot"></span><span>${escapeHtml(syncText(Sync.status))}${pending ? ` · ${T('nWaiting', { changes: tn('nChanges', pending) })}` : ''} · ${T('lastSynced', { time: relativeTime(Store.lastSyncAt) })}</span></div>
       <div class="account-actions">
-        <button class="btn btn-ghost" type="button" data-action="sync-now">${iconSpan('refresh')}Sync now</button>
-        <button class="btn btn-ghost" type="button" data-action="sign-out">${iconSpan('logout')}Sign out</button>
+        <button class="btn btn-ghost" type="button" data-action="sync-now">${iconSpan('refresh')}${T('syncNow')}</button>
+        <button class="btn btn-ghost" type="button" data-action="sign-out">${iconSpan('logout')}${T('signOut')}</button>
       </div>
       <div class="danger-zone">
-        <button class="btn btn-danger-ghost" type="button" data-action="delete-account">${iconSpan('trash')}Delete account</button>
+        <button class="btn btn-danger-ghost" type="button" data-action="delete-account">${iconSpan('trash')}${T('deleteAccount')}</button>
       </div>`;
   } else if (configured) {
     card.innerHTML = `
-      <div class="card-head"><h2>Account</h2></div>
-      <div class="account-row"><span class="avatar">${iconSpan('device')}</span><div class="who"><strong>This device only</strong><span class="muted small">Your data is stored in this browser</span></div></div>
-      <p class="muted">Create a free account to back up your habits and use them on your phone, tablet and computer. Your current data comes with you.</p>
-      <div class="account-actions"><button class="btn btn-primary" type="button" data-action="show-auth">${iconSpan('cloud')}Sign in or create account</button></div>`;
+      <div class="card-head"><h2>${T('account')}</h2></div>
+      <div class="account-row"><span class="avatar">${iconSpan('device')}</span><div class="who"><strong>${T('deviceOnly')}</strong><span class="muted small">${T('storedInBrowser')}</span></div></div>
+      <p class="muted">${T('createFreeAccount')}</p>
+      <div class="account-actions"><button class="btn btn-primary" type="button" data-action="show-auth">${iconSpan('cloud')}${T('signInOrCreate')}</button></div>`;
   } else {
     card.innerHTML = `
-      <div class="card-head"><h2>Account</h2></div>
-      <div class="notice">${iconSpan('info')}<p>Accounts and sync aren't set up on this site yet, so data stays in this browser. To enable them, follow <code>README.md</code> (Firebase setup).</p></div>`;
+      <div class="card-head"><h2>${T('account')}</h2></div>
+      <div class="notice">${iconSpan('info')}<p>${t('notConfiguredSettings')}</p></div>`;
   }
   if (UI.corruptKey || UI.corruptRaw) {
-    card.insertAdjacentHTML('beforeend', `<div class="notice subtle" style="margin-top:14px">${iconSpan('alert')}<p>Some saved data on this device couldn't be read and was set aside instead of being overwritten. <button class="link-btn" type="button" data-action="download-corrupt">Download it</button></p></div>`);
+    card.insertAdjacentHTML('beforeend', `<div class="notice subtle" style="margin-top:14px">${iconSpan('alert')}<p>${T('corruptNotice')} <button class="link-btn" type="button" data-action="download-corrupt">${T('downloadIt')}</button></p></div>`);
   }
 }
 
@@ -1789,6 +1815,7 @@ function renderAccountCard() {
    ========================================================= */
 const charts = {};
 const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const CHART_FONT = '"Inter", "Noto Sans Thai", system-ui, sans-serif';
 
 function chartTheme() {
   return {
@@ -1818,7 +1845,7 @@ function prepareChartBox(boxId, key, emptyMsg) {
   const box = $(`#${boxId}`);
   box.querySelector('.chart-empty')?.remove();
   const canvas = box.querySelector('canvas');
-  const msg = typeof window.Chart === 'undefined' ? 'Charts are unavailable in this browser.' : emptyMsg;
+  const msg = typeof window.Chart === 'undefined' ? t('chartsUnavailable') : emptyMsg;
   if (msg) {
     charts[key]?.destroy();
     delete charts[key];
@@ -1859,12 +1886,12 @@ function baseOptions(th) {
       tooltip: {
         backgroundColor: th.ink, titleColor: th.surface, bodyColor: th.surface,
         padding: 10, cornerRadius: 8, displayColors: false,
-        titleFont: { family: 'Inter', weight: '600' }, bodyFont: { family: 'Inter' },
+        titleFont: { family: CHART_FONT, weight: '600' }, bodyFont: { family: CHART_FONT },
       },
     },
     scales: {
-      x: { grid: { display: false }, border: { display: false }, ticks: { color: th.text, font: { family: 'Inter', size: 11 }, maxRotation: 0, autoSkipPadding: 12 } },
-      y: { min: 0, max: 100, grid: { color: th.grid }, border: { display: false }, ticks: { color: th.text, font: { family: 'Inter', size: 11 }, stepSize: 25, callback: (v) => `${v}%` } },
+      x: { grid: { display: false }, border: { display: false }, ticks: { color: th.text, font: { family: CHART_FONT, size: 11 }, maxRotation: 0, autoSkipPadding: 12 } },
+      y: { min: 0, max: 100, grid: { color: th.grid }, border: { display: false }, ticks: { color: th.text, font: { family: CHART_FONT, size: 11 }, stepSize: 25, callback: (v) => `${v}%` } },
     },
   };
 }
@@ -1872,26 +1899,26 @@ function baseOptions(th) {
 function dayTooltip(days) {
   return {
     title: (items) => fmtLong(days[items[0].dataIndex].date),
-    label: (item) => { const d = days[item.dataIndex]; return d.rate === null ? 'Nothing scheduled' : `${pct(d.rate)}% · ${d.done} of ${d.eligible} done`; },
+    label: (item) => { const d = days[item.dataIndex]; return d.rate === null ? t('nothingScheduled') : t('tooltipDone', { pct: pct(d.rate), done: d.done, total: d.eligible }); },
   };
 }
 
 function renderWeekChart() {
-  const t = today();
-  const days = Stats.range(addDays(t, -6), t);
+  const tday = today();
+  const days = Stats.range(addDays(tday, -6), tday);
   const avg = Stats.aggregate(days).rate;
-  $('#weekAvg').textContent = avg === null ? 'no data yet' : `average ${pct(avg)}%`;
+  $('#weekAvg').textContent = avg === null ? t('noDataYet') : t('averagePct', { pct: pct(avg) });
   const hasData = days.some((d) => d.rate !== null && (d.done > 0 || d.key < todayKey()));
-  if (!prepareChartBox('weekChartBox', 'week', hasData ? null : 'Your last 7 days will appear here once you start checking off habits.')) return;
+  if (!prepareChartBox('weekChartBox', 'week', hasData ? null : t('weekChartEmpty'))) return;
   const th = chartTheme();
   const opts = baseOptions(th);
   opts.plugins.tooltip.callbacks = dayTooltip(days);
   upsertChart('week', $('#weekChart'), {
     type: 'bar',
     data: {
-      labels: days.map((d, i) => (i === 6 ? 'Today' : DAY_SHORT[d.date.getDay()])),
+      labels: days.map((d, i) => (i === 6 ? t('today') : dayShort(d.date.getDay()))),
       datasets: [{
-        label: 'Completion',
+        label: t('completion'),
         data: days.map((d) => (d.rate === null ? null : pct(d.rate))),
         backgroundColor: gradientFill(th, 'ff', 'cc'),
         borderRadius: 6, borderSkipped: 'bottom', maxBarThickness: 36,
@@ -1903,7 +1930,7 @@ function renderWeekChart() {
 
 function renderTrendChart(days) {
   const hasData = days.some((d) => d.rate !== null && d.key < todayKey()) || days.some((d) => d.done > 0);
-  if (!prepareChartBox('trendChartBox', 'trend', hasData ? null : 'No check-ins in this range yet.')) return;
+  if (!prepareChartBox('trendChartBox', 'trend', hasData ? null : t('noCheckinsRange'))) return;
   const th = chartTheme();
   const opts = baseOptions(th);
   opts.plugins.tooltip.callbacks = dayTooltip(days);
@@ -1928,22 +1955,22 @@ function renderTrendChart(days) {
 
 function renderHabitChart(perHabit) {
   const rows = perHabit.filter((x) => x.r.rate !== null).sort((a, b) => b.r.rate - a.r.rate);
-  if (!prepareChartBox('habitChartBox', 'habit', rows.length ? null : 'No habits were scheduled in this range.')) return;
+  if (!prepareChartBox('habitChartBox', 'habit', rows.length ? null : t('noHabitsRange'))) return;
   const th = chartTheme();
   const opts = baseOptions(th);
   opts.indexAxis = 'y';
   opts.interaction = { mode: 'nearest', axis: 'y', intersect: false };
   opts.scales = {
-    x: { min: 0, max: 100, grid: { color: th.grid }, border: { display: false }, ticks: { color: th.text, font: { family: 'Inter', size: 11 }, stepSize: 25, callback: (v) => `${v}%` } },
-    y: { grid: { display: false }, border: { display: false }, ticks: { color: th.ink, font: { family: 'Inter', size: 12, weight: '500' } } },
+    x: { min: 0, max: 100, grid: { color: th.grid }, border: { display: false }, ticks: { color: th.text, font: { family: CHART_FONT, size: 11 }, stepSize: 25, callback: (v) => `${v}%` } },
+    y: { grid: { display: false }, border: { display: false }, ticks: { color: th.ink, font: { family: CHART_FONT, size: 12, weight: '500' } } },
   };
-  opts.plugins.tooltip.callbacks = { label: (item) => { const r = rows[item.dataIndex].r; return `${pct(r.rate)}% · ${r.done} of ${r.eligible} done`; } };
+  opts.plugins.tooltip.callbacks = { label: (item) => { const r = rows[item.dataIndex].r; return t('tooltipDone', { pct: pct(r.rate), done: r.done, total: r.eligible }); } };
   upsertChart('habit', $('#habitChart'), {
     type: 'bar',
     data: {
       labels: rows.map((x) => x.h.name),
       datasets: [{
-        label: 'Completion',
+        label: t('completion'),
         data: rows.map((x) => pct(x.r.rate)),
         backgroundColor: rows.map((x) => x.h.color), // colour follows the habit, not its rank
         borderRadius: 5, borderSkipped: 'start', maxBarThickness: 22,
@@ -1955,13 +1982,13 @@ function renderHabitChart(perHabit) {
 
 function renderDonutChart(agg) {
   const total = agg.done + agg.skipped + agg.missed;
-  if (!prepareChartBox('donutChartBox', 'donut', agg.done + agg.skipped > 0 ? null : 'No check-ins in this range yet.')) return;
+  if (!prepareChartBox('donutChartBox', 'donut', agg.done + agg.skipped > 0 ? null : t('noCheckinsRange'))) return;
   const th = chartTheme();
   const share = (v) => Math.round((v / total) * 100);
   upsertChart('donut', $('#donutChart'), {
     type: 'doughnut',
     data: {
-      labels: ['Done', 'Missed', 'Skipped'],
+      labels: [t('donutDone'), t('donutMissed'), t('donutSkipped')],
       datasets: [{ data: [agg.done, agg.missed, agg.skipped], backgroundColor: [th.accent, th.low, th.gray], borderColor: th.surface, borderWidth: 2, hoverOffset: 4 }],
     },
     options: {
@@ -1970,7 +1997,7 @@ function renderDonutChart(agg) {
         legend: {
           position: 'bottom',
           labels: {
-            color: th.ink, usePointStyle: true, pointStyle: 'circle', boxWidth: 8, padding: 16, font: { family: 'Inter', size: 12 },
+            color: th.ink, usePointStyle: true, pointStyle: 'circle', boxWidth: 8, padding: 16, font: { family: CHART_FONT, size: 12 },
             generateLabels: (chart) => chart.data.labels.map((l, i) => {
               const v = chart.data.datasets[0].data[i];
               return { text: `${l}  ${v} (${share(v)}%)`, fillStyle: chart.data.datasets[0].backgroundColor[i], strokeStyle: 'transparent', fontColor: th.ink, index: i, hidden: false };
@@ -2014,8 +2041,8 @@ function openHabitModal(id = null, template = null) {
   f.elements.startDate.min = habitForm.minStart;
   f.elements.startDate.max = todayKey();
   f.elements.active.checked = h ? h.active : true;
-  $('#habitModalTitle').textContent = h ? 'Edit habit' : 'New habit';
-  $('#habitSubmit').textContent = h ? 'Save changes' : 'Create habit';
+  $('#habitModalTitle').textContent = h ? t('editHabit') : t('newHabit');
+  $('#habitSubmit').textContent = h ? t('saveChanges') : t('createHabit');
   $('#habitDeleteBtn').hidden = !h;
   $('#habitHistoryNote').hidden = !h;
   renderHabitPickers();
@@ -2024,11 +2051,11 @@ function openHabitModal(id = null, template = null) {
 }
 
 function renderHabitPickers() {
-  $('#iconPicker').innerHTML = HABIT_ICONS.map((n) => `<button type="button" class="${n === habitForm.icon ? 'active' : ''}" data-icon-choice="${n}" style="--pc:${habitForm.color}" aria-label="Icon: ${n}" aria-pressed="${n === habitForm.icon}">${iconSpan(n)}</button>`).join('');
-  $('#colorPicker').innerHTML = HABIT_COLORS.map((c, i) => `<button type="button" class="${c === habitForm.color ? 'active' : ''}" data-color-choice="${c}" style="--c:${c}" aria-label="Colour ${i + 1}" aria-pressed="${c === habitForm.color}"></button>`).join('');
+  $('#iconPicker').innerHTML = HABIT_ICONS.map((n) => `<button type="button" class="${n === habitForm.icon ? 'active' : ''}" data-icon-choice="${n}" style="--pc:${habitForm.color}" aria-label="${escapeHtml(t('iconName', { name: (Lang.dict().iconNames || window.I18N.en.iconNames)[n] || n }))}" aria-pressed="${n === habitForm.icon}">${iconSpan(n)}</button>`).join('');
+  $('#colorPicker').innerHTML = HABIT_COLORS.map((c, i) => `<button type="button" class="${c === habitForm.color ? 'active' : ''}" data-color-choice="${c}" style="--c:${c}" aria-label="${escapeHtml(t('colorN', { n: i + 1 }))}" aria-pressed="${c === habitForm.color}"></button>`).join('');
   const ws = Stats.settings().weekStart;
   $('#dayPicker').innerHTML = ALL_DAYS.map((i) => (ws + i) % 7)
-    .map((d) => `<button type="button" class="${habitForm.days.includes(d) ? 'on' : ''}" data-day="${d}" aria-pressed="${habitForm.days.includes(d)}">${DAY_SHORT[d]}</button>`).join('');
+    .map((d) => `<button type="button" class="${habitForm.days.includes(d) ? 'on' : ''}" data-day="${d}" aria-pressed="${habitForm.days.includes(d)}">${dayShort(d)}</button>`).join('');
   const s = [...habitForm.days].sort().join(',');
   $$('#freqPresets .chip').forEach((c) => c.classList.toggle('active',
     (c.dataset.preset === 'daily' && s === '0,1,2,3,4,5,6') || (c.dataset.preset === 'weekdays' && s === '1,2,3,4,5') || (c.dataset.preset === 'weekends' && s === '0,6')));
@@ -2053,10 +2080,10 @@ function submitHabitForm(e) {
   let valid = true;
   const setErr = (field, msg, input) => { $(`[data-error-for="${field}"]`, f).textContent = msg; input?.classList.toggle('invalid', Boolean(msg)); if (msg) valid = false; };
   const dup = name && Store.state.habits.find((h) => h.name.toLowerCase() === name.toLowerCase() && h.id !== habitForm.editingId);
-  setErr('habitName', !name ? 'Give your habit a name.' : dup ? 'You already have a habit with this name.' : '', el.habitName);
-  setErr('days', habitForm.days.length ? '' : 'Pick at least one day.');
+  setErr('habitName', !name ? t('errHabitName') : dup ? t('errHabitDup') : '', el.habitName);
+  setErr('days', habitForm.days.length ? '' : t('errPickDay'));
   const start = el.startDate.value;
-  setErr('startDate', !isDateKey(start) ? 'Choose a start date.' : start > todayKey() ? "Start date can't be in the future." : start < habitForm.minStart ? `Choose a date on or after ${fmtDate(fromKey(habitForm.minStart), { month: 'short', day: 'numeric', year: 'numeric' })}.` : '', el.startDate);
+  setErr('startDate', !isDateKey(start) ? t('errChooseStart') : start > todayKey() ? t('errStartFuture') : start < habitForm.minStart ? t('errStartMin', { date: fmtDate(fromKey(habitForm.minStart), { month: 'short', day: 'numeric', year: 'numeric' }) }) : '', el.startDate);
   if (!valid) return;
 
   const data = {
@@ -2070,10 +2097,10 @@ function submitHabitForm(e) {
     active: el.active.checked,
   };
   if (habitForm.editingId) {
-    if (!Store.updateHabit(habitForm.editingId, data)) toast('This habit was deleted on another device', 'alert');
-    else toast('Habit updated');
+    if (!Store.updateHabit(habitForm.editingId, data)) toast(t('habitDeletedElsewhere'), 'alert');
+    else toast(t('habitUpdated'));
   } else if (Store.addHabit(data)) {
-    toast(`"${name}" added`);
+    toast(t('habitAdded', { name }));
   }
   $('#habitModal').close();
 }
@@ -2082,14 +2109,14 @@ async function deleteHabit(id) {
   const h = Store.getHabit(id);
   if (!h) return;
   const ok = await confirmDialog({
-    title: `Delete "${h.name}"?`,
-    message: 'This removes the habit and all of its check-in history on every device. This can\'t be undone.',
-    confirmText: 'Delete habit',
+    title: t('deleteHabitTitle', { name: h.name }),
+    message: t('deleteHabitMsg'),
+    confirmText: t('deleteHabitBtn'),
   });
   if (!ok) return;
   if ($('#habitModal').open) $('#habitModal').close();
   Store.deleteHabit(id);
-  toast('Habit deleted', 'trash');
+  toast(t('habitDeleted'), 'trash');
 }
 
 /* ---------- Goal form ---------- */
@@ -2112,8 +2139,8 @@ function openGoalModal(id = null) {
   const habits = Store.habits;
   el.habitId.innerHTML = habits.map((h) => `<option value="${escapeHtml(h.id)}">${escapeHtml(h.name)}</option>`).join('');
   if (g?.habitId) el.habitId.value = g.habitId;
-  $('#goalModalTitle').textContent = g ? 'Edit goal' : 'New goal';
-  $('#goalSubmit').textContent = g ? 'Save changes' : 'Create goal';
+  $('#goalModalTitle').textContent = g ? t('editGoal') : t('newGoal');
+  $('#goalSubmit').textContent = g ? t('saveChanges') : t('createGoal');
   $('#goalDeleteBtn').hidden = !g;
   syncGoalMode();
   $('#goalModal').showModal();
@@ -2125,7 +2152,7 @@ function syncGoalMode() {
   if (!hasHabits) goalForm.mode = 'manual';
   $$('#goalModeChoice button').forEach((b) => {
     b.classList.toggle('active', b.dataset.mode === goalForm.mode);
-    if (b.dataset.mode === 'habit') { b.disabled = !hasHabits; b.title = hasHabits ? '' : 'Create a habit first'; }
+    if (b.dataset.mode === 'habit') { b.disabled = !hasHabits; b.title = hasHabits ? '' : t('createHabitFirst'); }
   });
   $('#goalHabitField').hidden = goalForm.mode !== 'habit';
   $('#goalCurrentField').hidden = goalForm.mode === 'habit';
@@ -2139,10 +2166,10 @@ function submitGoalForm(e) {
   const target = Math.floor(Number(el.goalTarget.value));
   let valid = true;
   const setErr = (field, msg, input) => { $(`[data-error-for="${field}"]`, f).textContent = msg; input?.classList.toggle('invalid', Boolean(msg)); if (msg) valid = false; };
-  setErr('goalTitle', title ? '' : 'Describe your goal.', el.goalTitle);
-  setErr('goalTarget', target >= 1 && target <= 1e9 ? '' : 'Target must be a whole number of at least 1.', el.goalTarget);
+  setErr('goalTitle', title ? '' : t('errGoalTitle'), el.goalTitle);
+  setErr('goalTarget', target >= 1 && target <= 1e9 ? '' : t('errGoalTarget'), el.goalTarget);
   const start = isDateKey(el.startDate.value) ? el.startDate.value : todayKey();
-  setErr('deadline', el.deadline.value && el.deadline.value < start ? 'Deadline must be after the start date.' : '', el.deadline);
+  setErr('deadline', el.deadline.value && el.deadline.value < start ? t('errDeadline') : '', el.deadline);
   if (!valid) return;
 
   const data = {
@@ -2156,10 +2183,10 @@ function submitGoalForm(e) {
     deadline: el.deadline.value || '',
   };
   if (goalForm.editingId) {
-    if (Store.updateGoal(goalForm.editingId, data)) toast('Goal updated');
-    else toast('This goal was deleted on another device', 'alert');
+    if (Store.updateGoal(goalForm.editingId, data)) toast(t('goalUpdated'));
+    else toast(t('goalDeletedElsewhere'), 'alert');
   } else if (Store.addGoal(data)) {
-    toast('Goal created');
+    toast(t('goalCreated'));
   }
   $('#goalModal').close();
 }
@@ -2167,11 +2194,11 @@ function submitGoalForm(e) {
 async function deleteGoal(id) {
   const g = Store.getGoal(id);
   if (!g) return;
-  const ok = await confirmDialog({ title: `Delete "${g.title}"?`, message: 'The goal and its progress will be removed.', confirmText: 'Delete goal' });
+  const ok = await confirmDialog({ title: t('deleteGoalTitle', { name: g.title }), message: t('deleteGoalMsg'), confirmText: t('deleteGoalBtn') });
   if (!ok) return;
   if ($('#goalModal').open) $('#goalModal').close();
   Store.deleteGoal(id);
-  toast('Goal deleted', 'trash');
+  toast(t('goalDeleted'), 'trash');
 }
 
 function adjustGoal(id, delta) {
@@ -2180,14 +2207,14 @@ function adjustGoal(id, delta) {
   const before = Stats.goalProgress(g).completed;
   Store.updateGoal(id, { current: Math.max(0, g.current + delta) });
   const after = Store.getGoal(id);
-  if (after && !before && Stats.goalProgress(after).completed) toast(`Goal reached: ${g.title}`, 'award');
+  if (after && !before && Stats.goalProgress(after).completed) toast(t('goalReached', { name: g.title }), 'award');
 }
 
 /* ---------- Theme (per device) ---------- */
 function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
   const dark = theme === 'dark';
-  $$('.theme-label').forEach((el) => { el.textContent = dark ? 'Dark mode' : 'Light mode'; });
+  $$('.theme-label').forEach((el) => { el.textContent = dark ? t('darkMode') : t('lightMode'); });
   $$('.theme-icon').forEach((el) => { el.innerHTML = icon(dark ? 'moon' : 'sun'); });
   $('meta[name="theme-color"]').setAttribute('content', dark ? '#0a0e1f' : '#f4f4fb');
 }
@@ -2217,7 +2244,7 @@ function exportData() {
   Object.entries(s.logs).forEach(([date, day]) => Object.entries(day).forEach(([habitId, status]) => logs.push({ habitId, date, status })));
   const payload = { app: 'cadence', version: 2, exportedAt: nowIso(), profile: s.profile, habits: s.habits, goals: s.goals, logs };
   download(`cadence-backup-${todayKey()}.json`, JSON.stringify(payload, null, 2));
-  toast('Backup downloaded', 'download');
+  toast(t('backupDownloaded'), 'download');
 }
 
 async function importData(file) {
@@ -2226,16 +2253,16 @@ async function importData(file) {
     if (file.size > LIMITS.backupBytes) throw new Error('File too large');
     const parsed = parseData(JSON.parse(await file.text()));
     const ok = await confirmDialog({
-      title: 'Replace your data with this backup?',
-      message: `The backup has ${plural(parsed.habits.length, 'habit')}, ${plural(countLogs(parsed.logs), 'check-in')} and ${plural(parsed.goals.length, 'goal')}. Your current data will be replaced${Store.mode === 'cloud' ? ' on all your devices' : ''}.`,
-      confirmText: 'Replace data',
+      title: t('replaceTitle'),
+      message: t(Store.mode === 'cloud' ? 'replaceMsgCloud' : 'replaceMsg', { habits: tn('nHabits', parsed.habits.length), checkins: tn('nCheckins', countLogs(parsed.logs)), goals: tn('nGoals', parsed.goals.length) }),
+      confirmText: t('replaceBtn'),
     });
     if (!ok) return;
     Store.replaceAll(parsed);
-    toast('Backup imported', 'upload');
+    toast(t('backupImported'), 'upload');
   } catch (err) {
     console.error(err);
-    toast(err.message === 'File too large' ? 'That file is too large to be a Cadence backup' : 'That file isn\'t a valid Cadence backup', 'alert');
+    toast(err.message === 'File too large' ? t('fileTooLarge') : t('invalidBackup'), 'alert');
   } finally {
     $('#importFile').value = '';
   }
@@ -2253,28 +2280,28 @@ const Auth = {
   friendlyError(err) {
     const code = String(err?.code || '');
     const map = {
-      'auth/invalid-credential': 'Email or password is incorrect.',
-      'auth/invalid-login-credentials': 'Email or password is incorrect.',
-      'auth/wrong-password': 'Email or password is incorrect.',
-      'auth/user-not-found': 'Email or password is incorrect.',
-      'auth/email-already-in-use': 'An account with this email already exists. Try signing in.',
-      'auth/account-exists-with-different-credential': 'This email is already used with another sign-in method. Try the other method.',
-      'auth/weak-password': 'Please choose a stronger password (at least 8 characters).',
-      'auth/invalid-email': 'Enter a valid email address.',
-      'auth/too-many-requests': 'Too many attempts. Please wait a few minutes and try again.',
-      'auth/user-disabled': 'This account has been disabled.',
-      'auth/network-request-failed': 'Can\'t reach the server. Check your internet connection.',
-      'auth/unauthorized-domain': 'This website\'s address isn\'t allowed to sign in yet. The site owner needs to add it in Firebase → Authentication → Settings → Authorized domains.',
-      'auth/operation-not-allowed': 'This sign-in method isn\'t turned on yet. The site owner can enable it in Firebase → Authentication → Sign-in method.',
-      'auth/operation-not-supported-in-this-environment': 'Google sign-in needs the site to be opened from its web address (http/https), not as a file.',
-      'auth/requires-recent-login': 'For your security, please sign out and sign in again, then try once more.',
+      'auth/invalid-credential': 'errWrongCredentials',
+      'auth/invalid-login-credentials': 'errWrongCredentials',
+      'auth/wrong-password': 'errWrongCredentials',
+      'auth/user-not-found': 'errWrongCredentials',
+      'auth/email-already-in-use': 'errEmailInUse',
+      'auth/account-exists-with-different-credential': 'errOtherMethod',
+      'auth/weak-password': 'errWeakPassword',
+      'auth/invalid-email': 'enterValidEmail',
+      'auth/too-many-requests': 'errTooMany',
+      'auth/user-disabled': 'errDisabled',
+      'auth/network-request-failed': 'errNetwork',
+      'auth/unauthorized-domain': 'errDomain',
+      'auth/operation-not-allowed': 'errMethodOff',
+      'auth/operation-not-supported-in-this-environment': 'errFileProtocol',
+      'auth/requires-recent-login': 'errRecentLogin',
       'auth/popup-closed-by-user': '',
       'auth/cancelled-popup-request': '',
       'auth/user-cancelled': '',
     };
-    if (code in map) return map[code];
-    if (!navigator.onLine) return map['auth/network-request-failed'];
-    return 'Something went wrong. Please try again.';
+    if (code in map) return map[code] ? t(map[code]) : '';
+    if (!navigator.onLine) return t('errNetwork');
+    return t('errGeneric');
   },
 };
 
@@ -2282,11 +2309,11 @@ function setAuthTab(tab) {
   Auth.tab = tab;
   const signup = tab === 'signup';
   $$('#authTabs button').forEach((b) => b.classList.toggle('active', b.dataset.authTab === tab));
-  $('#authTitle').textContent = signup ? 'Create your account' : 'Welcome back';
-  $('#authLead').textContent = signup ? 'Free, and your habits sync across your phone, tablet and computer.' : 'Sign in to keep your habits in sync on every device.';
+  $('#authTitle').textContent = signup ? t('authCreateTitle') : t('authWelcome');
+  $('#authLead').textContent = signup ? t('authLeadSignup') : t('authLeadSignin');
   $('#authNameField').hidden = !signup;
   $('#authPassword').autocomplete = signup ? 'new-password' : 'current-password';
-  $('#authSubmit').textContent = signup ? 'Create account' : 'Sign in';
+  $('#authSubmit').textContent = signup ? t('createAccount') : t('signIn');
   $('#forgotLink').hidden = signup;
   setMsg('#authMsg', '');
 }
@@ -2326,8 +2353,8 @@ async function submitAuth(e) {
   const password = $('#authPassword').value;
   const name = str($('#authName').value, 40);
   const signup = Auth.tab === 'signup';
-  if (!EMAIL_RE.test(email)) return setMsg('#authMsg', 'Enter a valid email address.');
-  if (password.length < (signup ? 8 : 1)) return setMsg('#authMsg', signup ? 'Password must be at least 8 characters.' : 'Enter your password.');
+  if (!EMAIL_RE.test(email)) return setMsg('#authMsg', t('enterValidEmail'));
+  if (password.length < (signup ? 8 : 1)) return setMsg('#authMsg', signup ? t('passwordMin') : t('enterPassword'));
   const btn = $('#authSubmit');
   setLoading(btn, true);
   setMsg('#authMsg', '');
@@ -2374,14 +2401,14 @@ async function signInWithGoogle(btn) {
 async function submitReset(e) {
   e.preventDefault();
   const email = $('#resetEmail').value.trim();
-  if (!EMAIL_RE.test(email)) return setMsg('#resetMsg', 'Enter a valid email address.');
+  if (!EMAIL_RE.test(email)) return setMsg('#resetMsg', t('enterValidEmail'));
   const btn = $('#resetForm [type="submit"]');
   setLoading(btn, true);
   try {
     await Cloud.auth.sendPasswordResetEmail(email);
-    setMsg('#resetMsg', 'If an account exists for this email, a reset link is on its way. Check your spam folder too.', true);
+    setMsg('#resetMsg', t('resetSent'), true);
   } catch (err) {
-    setMsg('#resetMsg', err?.code === 'auth/user-not-found' ? 'If an account exists for this email, a reset link is on its way.' : Auth.friendlyError(err));
+    setMsg('#resetMsg', err?.code === 'auth/user-not-found' ? t('resetSent') : Auth.friendlyError(err));
   } finally {
     setLoading(btn, false);
   }
@@ -2401,7 +2428,7 @@ async function enterCloud(user) {
     Sync.stop();
     destroyCharts();
     const status = Store.open(user.uid, 'cloud', user.uid);
-    if (status === 'corrupt') toast('Some saved data couldn\'t be read — it was set aside and your account data will be restored from the cloud', 'alert');
+    if (status === 'corrupt') toast(t('corruptCloud'), 'alert');
   }
   showApp();
   Sync.setStatus(navigator.onLine ? 'syncing' : 'offline');
@@ -2417,7 +2444,7 @@ async function enterGuest() {
   destroyCharts();
   Prefs.set({ mode: 'guest' });
   const status = Store.open('guest', 'guest');
-  if (status === 'corrupt') toast('Some saved data couldn\'t be read — it was set aside (see Settings)', 'alert');
+  if (status === 'corrupt') toast(t('corruptLocal'), 'alert');
   Sync.setStatus('local');
   showApp();
   await offerV1Import();
@@ -2431,14 +2458,14 @@ async function offerGuestMerge() {
   try { data = parseData(res.value?.data); } catch { return; }
   if (!data.habits.length && !data.goals.length) return;
   const ok = await confirmDialog({
-    title: 'Add this device\'s data to your account?',
-    message: `You have ${plural(data.habits.length, 'habit')} and ${plural(data.goals.length, 'goal')} saved on this device without an account. Add them to your account so they sync everywhere?`,
-    confirmText: 'Add to account', cancelText: 'Not now', tone: 'neutral',
+    title: t('mergeTitle'),
+    message: t('mergeMsg', { habits: tn('nHabits', data.habits.length), goals: tn('nGoals', data.goals.length) }),
+    confirmText: t('addToAccount'), cancelText: t('notNow'), tone: 'neutral',
   });
   if (!ok) return;
   Store.mergeIn(data);
   LocalDB.remove(NS_PREFIX + 'guest');
-  toast('Your habits are now in your account', 'cloud');
+  toast(t('merged'), 'cloud');
 }
 
 /** Data from the first version of the app (single LocalStorage key). Offered once, never deleted automatically. */
@@ -2450,14 +2477,14 @@ async function offerV1Import() {
   try { data = parseData(res.value); } catch { Prefs.set({ v1Handled: true }); return; }
   if (!data.habits.length) { Prefs.set({ v1Handled: true }); return; }
   const ok = await confirmDialog({
-    title: 'Import data from the previous version?',
-    message: `Found ${plural(data.habits.length, 'habit')} and ${plural(countLogs(data.logs), 'check-in')} saved by an earlier version of Cadence in this browser. Note: early versions created example data automatically — only import if it's yours.`,
-    confirmText: 'Import', cancelText: 'Don\'t import', tone: 'neutral',
+    title: t('v1Title'),
+    message: t('v1Msg', { habits: tn('nHabits', data.habits.length), checkins: tn('nCheckins', countLogs(data.logs)) }),
+    confirmText: t('import'), cancelText: t('dontImport'), tone: 'neutral',
   });
   Prefs.set({ v1Handled: true });
   if (!ok) return;
   Store.mergeIn(data);
-  toast('Previous data imported', 'upload');
+  toast(t('v1Imported'), 'upload');
 }
 
 async function signOut() {
@@ -2465,11 +2492,9 @@ async function signOut() {
   if (Store.pendingCount()) await Sync.run();
   const pending = Store.pendingCount();
   const ok = await confirmDialog({
-    title: 'Sign out?',
-    message: pending
-      ? `${plural(pending, 'change')} haven't synced yet and will be lost if you sign out now. Connect to the internet first to keep them.`
-      : 'Your data stays safe in your account. This device\'s copy will be removed.',
-    confirmText: 'Sign out', tone: pending ? 'danger' : 'neutral',
+    title: t('signOutTitle'),
+    message: pending ? t('signOutPending', { changes: tn('nChanges', pending) }) : t('signOutSafe'),
+    confirmText: t('signOut'), tone: pending ? 'danger' : 'neutral',
   });
   if (!ok) return;
   Sync.stop();
@@ -2493,23 +2518,23 @@ function finishSignOut(removeLocal) {
 
 async function deleteAccount() {
   const user = Cloud.auth?.currentUser;
-  if (!user) { toast('Sign in again to manage your account', 'alert'); return; }
-  if (!navigator.onLine) { toast('You need to be online to delete your account', 'alert'); return; }
+  if (!user) { toast(t('signInAgainToManage'), 'alert'); return; }
+  if (!navigator.onLine) { toast(t('needOnlineDelete'), 'alert'); return; }
   // Firebase only deletes accounts that signed in recently; check first so we never delete data but keep the account
   const lastSignIn = Date.parse(user.metadata?.lastSignInTime || 0);
   if (Date.now() - lastSignIn > 4 * 60 * 1000) {
     const again = await confirmDialog({
-      title: 'Please sign in again first',
-      message: 'For your security, deleting an account needs a recent sign-in. Sign out, sign back in, then delete your account within a few minutes.',
-      confirmText: 'Sign out now', tone: 'neutral',
+      title: t('reauthTitle'),
+      message: t('reauthMsg'),
+      confirmText: t('signOutNow'), tone: 'neutral',
     });
     if (again) { Sync.stop(); finishSignOut(true); await Cloud.auth.signOut().catch(() => {}); }
     return;
   }
   const ok = await confirmDialog({
-    title: 'Delete your account?',
-    message: 'This permanently deletes your account and all habits, check-ins and goals on every device. Export a backup first if you might want them later.',
-    confirmText: 'Delete account',
+    title: t('deleteAccountTitle'),
+    message: t('deleteAccountMsg'),
+    confirmText: t('deleteAccount'),
   });
   if (!ok) return;
   const uid = user.uid;
@@ -2526,7 +2551,7 @@ async function deleteAccount() {
     return;
   }
   finishSignOut(true);
-  toast('Your account was deleted', 'trash');
+  toast(t('accountDeleted'), 'trash');
 }
 
 /** Auth state from Firebase (sign-in on another tab, token revoked, etc.). */
@@ -2552,11 +2577,11 @@ function setHabitStatus(dateKey, habitId, status) {
   const afterStreak = Stats.streaks().current;
   const after = Stats.day(fromKey(dateKey));
   if (afterStreak > beforeStreak) {
-    toast(`Streak up — ${plural(afterStreak, 'day')}`, 'flame');
+    toast(t('streakUp', { days: tn('nDays', afterStreak) }), 'flame');
     const card = $('#streakCard');
     if (card && UI.view === 'dashboard') { card.classList.remove('pulse'); void card.offsetWidth; card.classList.add('pulse'); }
   } else if (dateKey === todayKey() && after.rate === 1 && beforeRate !== 1 && after.done > 0) {
-    toast('Everything done for today. Great work!', 'award');
+    toast(t('allDoneToday'), 'award');
   }
 }
 
@@ -2566,7 +2591,11 @@ function quietly(fn) { suppressRender = true; try { fn(); } finally { suppressRe
 
 const actions = {
   'add-habit': () => openHabitModal(),
-  'use-template': (el) => { const t = TEMPLATES[Number(el.dataset.index)]; if (t) openHabitModal(null, { ...t, color: HABIT_COLORS[Number(el.dataset.index) % HABIT_COLORS.length] }); },
+  'use-template': (el) => {
+    const i = Number(el.dataset.index);
+    const tp = TEMPLATES[i];
+    if (tp) openHabitModal(null, { ...tp, name: t(tp.key), description: t(`${tp.key}Desc`), color: HABIT_COLORS[i % HABIT_COLORS.length] });
+  },
   'edit-habit': (el) => openHabitModal(el.dataset.id),
   'delete-habit': (el) => deleteHabit(el.dataset.id),
   'add-goal': () => openGoalModal(),
@@ -2592,7 +2621,7 @@ const actions = {
     const next = Store.getStatus(tk, id) === 'skipped' ? null : 'skipped';
     quietly(() => setHabitStatus(tk, id, next));
     renderDashboard();
-    if (next) toast('Skipped for today — it won\'t count against you', 'skip');
+    if (next) toast(t('skippedToast'), 'skip');
   },
   cycle: (el) => {
     const { id, date } = el.dataset;
@@ -2632,13 +2661,13 @@ const actions = {
   export: exportData,
   'clear-all': async () => {
     const ok = await confirmDialog({
-      title: 'Delete all habits & goals?',
-      message: `Every habit, check-in and goal will be permanently removed${Store.mode === 'cloud' ? ' from your account on all devices' : ' from this browser'}. Consider exporting a backup first.`,
-      confirmText: 'Delete everything',
+      title: t('clearAllTitle'),
+      message: t(Store.mode === 'cloud' ? 'clearAllMsgCloud' : 'clearAllMsgLocal'),
+      confirmText: t('deleteEverything'),
     });
     if (!ok) return;
     Store.replaceAll(emptyData(Store.profile));
-    toast('All habits and goals deleted', 'trash');
+    toast(t('allDeleted'), 'trash');
     location.hash = '#dashboard';
   },
   'download-corrupt': () => {
@@ -2650,7 +2679,7 @@ const actions = {
   'sync-now': () => {
     if (Store.mode !== 'cloud') { location.hash = '#settings'; return; }
     if (Sync.status === 'auth') { showAuth(); return; }
-    if (!navigator.onLine) { toast('You\'re offline — changes are saved and will sync when you reconnect', 'cloud'); return; }
+    if (!navigator.onLine) { toast(t('offlineToast'), 'cloud'); return; }
     Sync.schedule(0);
   },
   'sign-out': signOut,
@@ -2658,13 +2687,15 @@ const actions = {
   'show-auth': () => { Auth.tab = 'signin'; showAuth(); },
   'use-guest': () => enterGuest(),
   'google-sign-in': (el) => signInWithGoogle(el),
+  'toggle-lang': () => setLanguage(Lang.current === 'th' ? 'en' : 'th'),
   'show-reset': () => { $('#authMain').hidden = true; $('#authReset').hidden = false; $('#resetEmail').value = $('#authEmail').value; setMsg('#resetMsg', ''); },
   'show-signin': () => { $('#authReset').hidden = true; $('#authMain').hidden = false; },
   'toggle-password': (el) => {
     const input = $('#authPassword');
     const show = input.type === 'password';
     input.type = show ? 'text' : 'password';
-    el.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+    el.setAttribute('aria-label', show ? t('hidePassword') : t('showPassword'));
+    el.dataset.i18nAria = show ? 'hidePassword' : 'showPassword';
     el.querySelector('.i').innerHTML = icon(show ? 'eyeOff' : 'eye');
   },
 };
@@ -2681,7 +2712,7 @@ function bindEvents() {
     const el = e.target;
     if (el.matches('[data-action="toggle-active"]')) {
       Store.updateHabit(el.dataset.id, { active: el.checked });
-      toast(el.checked ? 'Habit resumed' : 'Habit paused — history is kept', el.checked ? 'refresh' : 'clock');
+      toast(el.checked ? t('habitResumed') : t('habitPaused'), el.checked ? 'refresh' : 'clock');
     }
   });
 
@@ -2772,14 +2803,15 @@ function bindEvents() {
     input.classList.toggle('invalid', !name);
     if (!name) return;
     Store.updateProfile({ name });
-    toast('Profile saved');
+    toast(t('profileSaved'));
   });
   $('#prefsForm').addEventListener('submit', (e) => {
     e.preventDefault();
     Store.updateProfile({ weekStart: Number($('#weekStart').value), streakThreshold: Number($('#streakThreshold').value) });
-    toast('Preferences saved');
+    toast(t('prefsSaved'));
   });
   $('#themeChoice').addEventListener('click', (e) => { const b = e.target.closest('[data-theme-choice]'); if (b) setTheme(b.dataset.themeChoice); });
+  $('#langChoice').addEventListener('click', (e) => { const b = e.target.closest('[data-lang-choice]'); if (b) setLanguage(b.dataset.langChoice); });
   $('#importFile').addEventListener('change', (e) => importData(e.target.files[0]));
   $('.file-btn').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('#importFile').click(); } });
 
@@ -2810,12 +2842,47 @@ function bindEvents() {
 
   // Keep tabs of the same browser in step
   window.addEventListener('storage', (e) => {
-    if (e.key === PREFS_KEY) { Prefs.load(); applyTheme(Prefs.data.theme); destroyCharts(); if (Store.ns) renderView(); return; }
+    if (e.key === PREFS_KEY) { Prefs.load(); applyTheme(Prefs.data.theme); if (Prefs.data.lang && Prefs.data.lang !== Lang.current) setLanguage(Prefs.data.lang, { save: false }); destroyCharts(); if (Store.ns) renderView(); return; }
     if (!Store.ns || e.key !== NS_PREFIX + Store.ns) return;
     if (e.newValue === null) return; // signed out elsewhere — auth events handle it
     Store.open(Store.ns, Store.mode, Store.userId);
     renderHeader(); renderView(); renderSyncStatus();
   });
+}
+
+/* ---------- Language switching ---------- */
+function detectLanguage() {
+  return (navigator.language || '').toLowerCase().startsWith('th') ? 'th' : 'en';
+}
+
+/** Fill every [data-i18n*] element in the static HTML. */
+function applyStaticText() {
+  $$('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
+  $$('[data-i18n-html]').forEach((el) => { el.innerHTML = t(el.dataset.i18nHtml); }); // trusted strings from i18n.js only
+  $$('[data-i18n-ph]').forEach((el) => { el.placeholder = t(el.dataset.i18nPh); });
+  $$('[data-i18n-aria]').forEach((el) => { el.setAttribute('aria-label', t(el.dataset.i18nAria)); });
+  $$('[data-i18n-title]').forEach((el) => { el.title = t(el.dataset.i18nTitle); });
+}
+
+function setLanguage(lang, { save = true, render = true } = {}) {
+  Lang.current = LANGS.includes(lang) ? lang : 'en';
+  document.documentElement.lang = Lang.current;
+  if (save) Prefs.set({ lang: Lang.current });
+  applyStaticText();
+  $('#authLang').textContent = Lang.current === 'th' ? 'English' : 'ไทย';
+  $('#authLang').setAttribute('lang', Lang.current === 'th' ? 'en' : 'th');
+  $$('[data-lang-choice]').forEach((b) => {
+    const on = b.dataset.langChoice === Lang.current;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-pressed', String(on));
+  });
+  if (!render) return;
+  applyTheme(Prefs.data.theme); // theme labels
+  if (!$('#auth').hidden) setAuthTab(Auth.tab);
+  if ($('#habitModal').open) { $('#habitModalTitle').textContent = habitForm.editingId ? t('editHabit') : t('newHabit'); $('#habitSubmit').textContent = habitForm.editingId ? t('saveChanges') : t('createHabit'); renderHabitPickers(); }
+  if ($('#goalModal').open) { $('#goalModalTitle').textContent = goalForm.editingId ? t('editGoal') : t('newGoal'); $('#goalSubmit').textContent = goalForm.editingId ? t('saveChanges') : t('createGoal'); }
+  destroyCharts();
+  if (Store.ns && !$('#app').hidden) { renderHeader(); renderView(); renderSyncStatus(); }
 }
 
 function registerServiceWorker() {
@@ -2826,6 +2893,7 @@ function registerServiceWorker() {
 async function boot() {
   hydrateIcons();
   Prefs.load();
+  setLanguage(Prefs.data.lang || detectLanguage(), { save: false, render: false });
   applyTheme(Prefs.data.theme);
   bindEvents();
   Cloud.init();
@@ -2877,6 +2945,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Last-resort fallback: never leave the loading screen up
     console.error(err);
     $('#boot').classList.add('hide');
-    document.body.insertAdjacentHTML('afterbegin', '<div class="banner" style="margin:16px">Cadence couldn\'t start. Try reloading the page.</div>');
+    document.body.insertAdjacentHTML('afterbegin', `<div class="banner" style="margin:16px">${escapeHtml(t('couldntStart'))}</div>`);
   });
 });
