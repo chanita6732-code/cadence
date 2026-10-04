@@ -8,7 +8,7 @@ rules_version = '2';
 //   users/{uid}                          profile + preferences
 //   users/{uid}/habits/{habitId}         habits   (soft-deleted with deleted = true)
 //   users/{uid}/goals/{goalId}           goals    (soft-deleted with deleted = true)
-//   users/{uid}/logs/{habitId}_{date}    check-ins (status null = cleared)
+//   users/{uid}/logs/{habitId}_{date}    check-ins (status null = cleared; value/target for measured habits)
 //
 // A user can only ever read or write under their own uid. Every write is
 // validated here too, mirroring the checks in script.js (defence in depth).
@@ -45,9 +45,19 @@ service cloud.firestore {
         && stamped(d);
     }
 
+    // Tracking type, daily target, unit and rating rule are optional so older app versions can still write
+    function validTracking(d) {
+      return d.get('tracking', 'boolean') in ['boolean', 'duration', 'count', 'distance']
+        && d.get('target', 1) is number && d.get('target', 1) > 0 && d.get('target', 1) <= 100000
+        && isText(d.get('unit', ''), 12)
+        && d.get('rule', '') in ['', 'sleep'];
+    }
+
     function validHabit(d) {
       return d.keys().hasOnly(['name', 'description', 'icon', 'color', 'days', 'weeklyTarget', 'startDate',
-                               'active', 'pausedRanges', 'order', 'createdAt', 'deleted', 'updatedAt'])
+                               'active', 'pausedRanges', 'order', 'createdAt', 'deleted', 'updatedAt',
+                               'tracking', 'target', 'unit', 'rule'])
+        && validTracking(d)
         && d.keys().hasAll(['name', 'description', 'icon', 'color', 'days', 'weeklyTarget', 'startDate',
                             'active', 'pausedRanges', 'order', 'createdAt', 'deleted', 'updatedAt'])
         && d.name is string && d.name.size() >= 1 && d.name.size() <= 40
@@ -84,7 +94,10 @@ service cloud.firestore {
     }
 
     function validLog(d, logId) {
-      return d.keys().hasOnly(['habitId', 'date', 'status', 'updatedAt'])
+      // value / target: the actual amount recorded for a measured habit and that day's target (optional)
+      return d.keys().hasOnly(['habitId', 'date', 'status', 'updatedAt', 'value', 'target'])
+        && (d.get('value', null) == null || (d.get('value', null) is number && d.get('value', null) >= 0 && d.get('value', null) <= 100000))
+        && (d.get('target', null) == null || (d.get('target', null) is number && d.get('target', null) > 0 && d.get('target', null) <= 100000))
         && d.keys().hasAll(['habitId', 'date', 'status', 'updatedAt'])
         && isId(d.habitId)
         && isDate(d.date)

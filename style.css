@@ -41,6 +41,7 @@
   --warn: #f0b75a;
   --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 30px rgba(3, 6, 20, .25);
   --shadow-lg: 0 30px 70px rgba(2, 4, 16, .6);
+  --lv0: #f07a8a; --lv1: #f0935a; --lv2: #f0b75a; --lv3: #9181ff; --lv4: #4ade80; /* achievement levels: very low → achieved */
   --hm-0: #1b2140;
   --hm-1: #2f2a6e;
   --hm-2: #4a3da8;
@@ -71,6 +72,7 @@
   --warn: #a86b00;
   --shadow: 0 1px 2px rgba(21, 25, 54, .04), 0 8px 24px rgba(21, 25, 54, .06);
   --shadow-lg: 0 30px 70px rgba(21, 25, 54, .2);
+  --lv0: #d0384f; --lv1: #c8601f; --lv2: #a86b00; --lv3: #5b45e0; --lv4: #15803d;
   --hm-0: #ebebf6;
   --hm-1: #d9d2fd;
   --hm-2: #ab9cf7;
@@ -449,6 +451,37 @@ code { font-size: .92em; padding: 1px 5px; border-radius: 5px; background: var(-
 .check.pop { animation: pop .42s var(--ease); }
 @keyframes pop { 0% { transform: scale(1); } 40% { transform: scale(1.2); } 100% { transform: scale(1); } }
 
+/* Measured habits: actual amount, progress and level */
+.amount { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; font-size: 12.5px; color: var(--muted); }
+.amount input {
+  width: 62px; height: 36px; padding: 0 6px; text-align: center;
+  background: var(--surface); border: 1.5px solid var(--border-strong); border-radius: 10px;
+  color: var(--text); font-weight: 600; font-size: 16px; font-variant-numeric: tabular-nums; outline: none;
+  transition: border-color .15s, box-shadow .15s; -moz-appearance: textfield;
+}
+.amount input::-webkit-outer-spin-button, .amount input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.amount input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.amount.lg { font-size: 15px; }
+.field .amount.lg input[type="number"] { width: 120px; height: 46px; font-size: 20px; }
+.habit-progress .pct { font-weight: 600; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.level { font-weight: 600; white-space: nowrap; }
+.lv0 { --lv: var(--lv0); } .lv1 { --lv: var(--lv1); } .lv2 { --lv: var(--lv2); } .lv3 { --lv: var(--lv3); } .lv4 { --lv: var(--lv4); }
+.level[class*="lv"] { color: var(--lv); }
+.bar[class*="lv"] > span { background: var(--lv); }
+.habit-target { font-size: 12px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.record-target { color: var(--text-2); }
+.record-target strong { color: var(--text); margin-left: 4px; }
+.record-progress { margin-top: 0; font-size: 13px; }
+.record-progress .bar { max-width: none; height: 8px; }
+.amount-btn {
+  min-width: 64px; height: 30px; padding: 0 10px; border-radius: 8px; flex-shrink: 0;
+  border: 1.5px solid var(--lv, var(--border-strong)); color: var(--text); font-weight: 600; font-size: 12.5px;
+  background: color-mix(in srgb, var(--lv, transparent) 14%, transparent); font-variant-numeric: tabular-nums;
+  transition: border-color .15s, transform .1s;
+}
+.amount-btn:hover { border-color: var(--accent); }
+.amount-btn:active { transform: scale(.96); }
+
 .skip-btn { width: 34px; height: 34px; }
 .skip-btn.active { color: var(--text); background: var(--surface-3); }
 
@@ -489,6 +522,9 @@ button.cell:active { transform: scale(.88); }
 .cell.off::after { content: ""; width: 4px; height: 4px; border-radius: 50%; background: var(--border-strong); }
 .cell.locked { opacity: .3; border-style: dotted; }
 .cell.pop { animation: pop .38s var(--ease); }
+.cell.measured { font-size: 11.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.cell.measured[class*="lv"] { color: var(--text); border-color: var(--lv); background: color-mix(in srgb, var(--lv) 16%, transparent); }
+.cell.measured.done { background: var(--grad); border-color: transparent; color: #fff; }
 .day-rate { font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 
 .legend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-top: 14px; font-size: 12px; color: var(--muted); }
@@ -840,6 +876,13 @@ button.cell:active { transform: scale(.88); }
   .habit-item .status-pill { display: none; }
   .habit-progress .bar { display: none; }
   .skip-btn { width: 40px; height: 40px; }
+  /* Measured rows: the amount field drops to its own line so the name and target stay readable */
+  .habit-item.measured { flex-wrap: wrap; }
+  .habit-item.measured .habit-info { flex: 1 1 0; }
+  .habit-item.measured .amount { order: 5; flex: 1 0 100%; justify-content: flex-end; padding-top: 2px; }
+  .amount input { width: 96px; height: 40px; }
+  .habit-item.measured .habit-progress .bar { display: block; max-width: 64px; }
+  #trackingChoice button { padding: 8px 4px; font-size: 12.5px; }
 
   .streak-stats { gap: 8px; }
   .streak-stats > div { padding: 10px; }

@@ -162,14 +162,14 @@ const HABIT_COLORS = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#2
 /** Starting points for new users — they only pre-fill the form; nothing is created until the user saves.
     Names come from i18n.js (tplStudy, tplStudyDesc, …) so they follow the chosen language. */
 const TEMPLATES = [
-  { key: 'tplStudy', icon: 'study', days: [1, 2, 3, 4, 5] },
-  { key: 'tplExercise', icon: 'dumbbell', days: [1, 3, 5], weeklyTarget: 3 },
-  { key: 'tplRead', icon: 'book', days: ALL_DAYS },
-  { key: 'tplEnglish', icon: 'globe', days: ALL_DAYS },
-  { key: 'tplCoding', icon: 'code', days: [1, 2, 3, 4, 5] },
-  { key: 'tplSleep', icon: 'bed', days: ALL_DAYS },
-  { key: 'tplWater', icon: 'droplet', days: ALL_DAYS },
-  { key: 'tplMeditate', icon: 'leaf', days: ALL_DAYS },
+  { key: 'tplStudy', icon: 'study', days: [1, 2, 3, 4, 5], tracking: 'duration', target: 2, unit: 'h' },
+  { key: 'tplExercise', icon: 'dumbbell', days: [1, 3, 5], weeklyTarget: 3, tracking: 'duration', target: 30, unit: 'min' },
+  { key: 'tplRead', icon: 'book', days: ALL_DAYS, tracking: 'count', target: 20, unit: 'pages' },
+  { key: 'tplEnglish', icon: 'globe', days: ALL_DAYS, tracking: 'duration', target: 15, unit: 'min' },
+  { key: 'tplCoding', icon: 'code', days: [1, 2, 3, 4, 5], tracking: 'duration', target: 60, unit: 'min' },
+  { key: 'tplSleep', icon: 'bed', days: ALL_DAYS, tracking: 'duration', target: 8, unit: 'h', rule: 'sleep' },
+  { key: 'tplWater', icon: 'droplet', days: ALL_DAYS, tracking: 'count', target: 8, unit: 'glasses' },
+  { key: 'tplMeditate', icon: 'leaf', days: ALL_DAYS, tracking: 'duration', target: 10, unit: 'min' },
 ];
 
 function icon(name) {
@@ -202,6 +202,20 @@ function sanitizeProfile(raw) {
   };
 }
 
+/* ---------- Tracking types ----------
+   boolean  : done / not done (the original checklist behaviour)
+   duration : time spent        (h, min)
+   count    : how many          (times, pages, glasses, … or a custom unit)
+   distance : how far           (km, m)
+   Measured habits have a daily `target`; each day's check-in stores the
+   actual value and the target it was measured against. */
+const TRACKING = ['boolean', 'duration', 'count', 'distance'];
+const UNITS = { duration: ['h', 'min'], count: ['times', 'pages', 'glasses', 'items'], distance: ['km', 'm'] };
+const RULES = ['', 'sleep']; // per-habit evaluation rule; '' = percentage of target
+const MAX_VALUE = 100000;
+const num = (v, min, max, fallback) => { const n = typeof v === 'string' && v.trim() === '' ? NaN : Number(v); return Number.isFinite(n) ? clamp(Math.round(n * 100) / 100, min, max) : fallback; };
+const isMeasured = (h) => h.tracking !== 'boolean';
+
 function sanitizeHabit(raw) {
   if (!raw || typeof raw !== 'object' || !isUuid(raw.id)) return null;
   const name = str(raw.name, 40);
@@ -212,10 +226,16 @@ function sanitizeHabit(raw) {
     .filter((r) => r && isDateKey(r.from) && (r.to === null || (isDateKey(r.to) && r.to >= r.from)))
     .slice(0, 100)
     .map((r) => ({ from: r.from, to: r.to }));
+  const tracking = TRACKING.includes(raw.tracking) ? raw.tracking : 'boolean'; // older habits have no type → checklist
+  const measured = tracking !== 'boolean';
   return {
     id: raw.id.toLowerCase(),
     name,
     description: str(raw.description, 80),
+    tracking,
+    target: measured ? num(raw.target, 0.01, MAX_VALUE, 1) : 1,
+    unit: measured ? (str(raw.unit, 12) || UNITS[tracking][0]) : '',
+    rule: tracking === 'duration' && RULES.includes(raw.rule) ? raw.rule : '',
     icon: HABIT_ICONS.includes(raw.icon) ? raw.icon : 'star',
     color: typeof raw.color === 'string' && HEX_RE.test(raw.color) ? raw.color.toLowerCase() : HABIT_COLORS[0],
     days,
@@ -251,6 +271,56 @@ function sanitizeGoal(raw, habitIds) {
 
 const STATUSES = ['done', 'skipped'];
 
+/* A check-in ("entry") is either a status string — 'done' | 'skipped' — or,
+   for measured habits, { v: actual value, t: target on that day }. */
+function sanitizeEntry(e) {
+  if (STATUSES.includes(e)) return e;
+  if (e && typeof e === 'object') {
+    const v = num(e.v, 0, MAX_VALUE, null);
+    if (v === null) return null;
+    return { v, t: num(e.t, 0.01, MAX_VALUE, 1) };
+  }
+  return null;
+}
+const entryStatus = (e) => (e == null ? null : typeof e === 'string' ? e : e.v >= e.t ? 'done' : 'partial');
+/** Share of the day's target reached, capped at 1 (the real value is kept in the entry). */
+const entryCredit = (e) => (e === 'done' ? 1 : e && typeof e === 'object' ? clamp(e.v / e.t, 0, 1) : 0);
+const sameEntry = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+
+const LEVEL_KEYS = ['lvVeryLow', 'lvLow', 'lvNear', 'lvAlmost', 'lvAchieved'];
+const SLEEP_KEYS = ['slVeryLittle', 'slLittle', 'slFair', 'slGood', 'slVeryGood'];
+
+/**
+ * Rate a measured check-in. Returns { value, target, pct, bar, level 0–4, label } or null.
+ * Default rule: percentage of target (0–39 very low, 40–69 low, 70–89 near, 90–99 almost, 100+ achieved).
+ * A habit can carry its own rule in `habit.rule`; add new ones here.
+ */
+function evaluate(h, entry) {
+  if (!entry || typeof entry !== 'object') return null;
+  const target = entry.t || h.target || 1;
+  const pct = Math.floor((entry.v / target) * 100 + 1e-9); // rounded down, so 100% only shows once the target is really reached
+  let level, label;
+  if (h.rule === 'sleep') {
+    // By hours relative to the target: 2+ short → very little, 2 short → little, 1 short → fair, on target → good, 1+ over → very good
+    const diff = (entry.v - target) / (h.unit === 'min' ? 60 : 1);
+    level = diff >= 1 ? 4 : diff >= 0 ? 3 : diff >= -1 ? 2 : diff >= -2 ? 1 : 0;
+    label = t(SLEEP_KEYS[level]);
+  } else {
+    level = pct >= 100 ? 4 : pct >= 90 ? 3 : pct >= 70 ? 2 : pct >= 40 ? 1 : 0;
+    label = t(LEVEL_KEYS[level]);
+  }
+  return { value: entry.v, target, pct, bar: clamp(pct, 0, 100), level, label };
+}
+
+const fmtValue = (v) => String(Math.round(v * 100) / 100);
+/** Known units are translated (unit_h, unit_km, …); custom units are shown as typed. */
+function unitLabel(u) {
+  const key = `unit_${u}`;
+  const en = (window.I18N && window.I18N.en) || {};
+  return Object.prototype.hasOwnProperty.call(en, key) ? t(key) : u;
+}
+const fmtAmount = (v, unit) => `${fmtValue(v)} ${unitLabel(unit)}`.trim();
+
 /**
  * Turn any supported shape (local record, v1 or v2 backup) into clean state.
  * Non-UUID ids (v1 data) are remapped to fresh UUIDs, and references follow.
@@ -277,15 +347,17 @@ function parseData(raw) {
 
   const logs = {};
   let count = 0;
-  const addLog = (date, rawHabitId, status) => {
-    if (count >= LIMITS.logs || !isDateKey(date) || !STATUSES.includes(status)) return;
+  const addLog = (date, rawHabitId, rawEntry) => {
+    const entry = sanitizeEntry(rawEntry);
+    if (count >= LIMITS.logs || !isDateKey(date) || entry === null) return;
     const hid = rawHabitId == null ? null : idMap.get(String(rawHabitId));
     if (!hid || !habitIds.has(hid)) return;
-    (logs[date] ||= {})[hid] = status;
+    (logs[date] ||= {})[hid] = entry;
     count++;
   };
   if (Array.isArray(raw.logs)) {
-    raw.logs.forEach((l) => { if (l && typeof l === 'object') addLog(l.date, l.habitId, l.status); });
+    // Backup format: { habitId, date, status } or, for measured habits, { habitId, date, value, target }
+    raw.logs.forEach((l) => { if (l && typeof l === 'object') addLog(l.date, l.habitId, typeof l.value === 'number' ? { v: l.value, t: l.target } : l.status); });
   } else if (raw.logs && typeof raw.logs === 'object') {
     Object.entries(raw.logs).forEach(([date, day]) => {
       if (day && typeof day === 'object') Object.entries(day).forEach(([hid, st]) => addLog(date, hid, st));
@@ -374,6 +446,7 @@ const Rows = {
       id: h.id, name: h.name, description: h.description, icon: h.icon, color: h.color, days: h.days,
       weeklyTarget: h.weeklyTarget, startDate: h.startDate, active: h.active, pausedRanges: h.pausedRanges,
       order: h.order, createdAt: h.createdAt, deleted,
+      tracking: h.tracking, target: h.target, unit: h.unit, rule: h.rule,
     },
   }),
   goal: (g, deleted = false) => ({
@@ -383,10 +456,15 @@ const Rows = {
       startDate: g.startDate, deadline: g.deadline || '', createdAt: g.createdAt, deleted,
     },
   }),
-  log: (date, habitId, status) => ({
-    key: `logs:${habitId}|${date}`, table: 'logs',
-    row: { habitId, date, status: status || null },
-  }),
+  log: (date, habitId, entry) => {
+    const measured = entry && typeof entry === 'object';
+    // `status` stays meaningful for measured check-ins too, so older app versions still read them
+    const status = measured ? (entry.v >= entry.t ? 'done' : null) : (entry || null);
+    return {
+      key: `logs:${habitId}|${date}`, table: 'logs',
+      row: { habitId, date, status, value: measured ? entry.v : null, target: measured ? entry.t : null },
+    };
+  },
   profile: (p) => ({
     key: 'profiles:me', table: 'profiles',
     row: { name: p.name, weekStart: p.weekStart, streakThreshold: p.streakThreshold },
@@ -510,17 +588,27 @@ const Store = {
   },
 
   /* ----- Logs ----- */
-  getStatus(dateKey, habitId) {
+  /** The raw check-in: 'done' | 'skipped' | { v, t } | null. */
+  getEntry(dateKey, habitId) {
     const day = this.state.logs[dateKey];
     return day && Object.prototype.hasOwnProperty.call(day, habitId) ? day[habitId] : null;
   },
-  setStatus(dateKey, habitId, status) {
+  /** 'done' | 'partial' (some progress, below target) | 'skipped' | null. */
+  getStatus(dateKey, habitId) { return entryStatus(this.getEntry(dateKey, habitId)); },
+  setEntry(dateKey, habitId, entry) {
     if (!isDateKey(dateKey) || !this.getHabit(habitId)) return;
-    const next = STATUSES.includes(status) ? status : null;
+    const next = sanitizeEntry(entry);
     const day = (this.state.logs[dateKey] ||= {});
     if (next) day[habitId] = next; else delete day[habitId];
     if (!Object.keys(day).length) delete this.state.logs[dateKey];
     this.commit([Rows.log(dateKey, habitId, next)]);
+  },
+  setStatus(dateKey, habitId, status) { this.setEntry(dateKey, habitId, STATUSES.includes(status) ? status : null); },
+  /** Record the actual amount for a measured habit (null clears it). The day's target is stored with it. */
+  setValue(dateKey, habitId, value) {
+    const h = this.getHabit(habitId);
+    if (!h) return;
+    this.setEntry(dateKey, habitId, value == null ? null : { v: value, t: h.target });
   },
 
   /* ----- Goals ----- */
@@ -907,8 +995,8 @@ function mergeDoc(table, id, d) {
     if (!isUuid(hid) || !isDateKey(d.date) || Sync.deadHabits.has(hid)) return false;
     if (!s.habits.some((h) => h.id === hid)) return 'orphan';
     if (Store.outbox[`logs:${hid}|${d.date}`]) return false;
-    const next = STATUSES.includes(d.status) ? d.status : null;
-    if (Store.getStatus(d.date, hid) === next) return false;
+    const next = typeof d.value === 'number' ? sanitizeEntry({ v: d.value, t: d.target }) : (STATUSES.includes(d.status) ? d.status : null);
+    if (sameEntry(Store.getEntry(d.date, hid), next)) return false;
     const day = (s.logs[d.date] ||= {});
     if (next) day[hid] = next; else delete day[hid];
     if (!Object.keys(day).length) delete s.logs[d.date];
@@ -923,7 +1011,9 @@ function mergeDoc(table, id, d) {
    One rule everywhere: a check-in counts only on a day the habit is
    scheduled (on/after its start date, on one of its weekdays, and not
    paused).
-   - Day rate = done ÷ (scheduled − skipped). Skips don't count against you.
+   - Each habit earns credit for the day: 1 when done, or actual ÷ target
+     (capped at 1) for measured habits. "Done" means the target was reached.
+   - Day rate = total credit ÷ (scheduled − skipped). Skips don't count against you.
      Days with nothing to do have rate = null and are neutral for streaks.
    - A day is "successful" when its rate ≥ the streak threshold.
    - Today not yet successful doesn't break a streak (the day isn't over).
@@ -952,13 +1042,16 @@ const Stats = {
     const key = toKey(date);
     return this.memo(`d:${key}`, () => {
       const habits = this.habitsForDate(date);
-      let done = 0, skipped = 0;
+      let done = 0, skipped = 0, partial = 0, credit = 0;
       habits.forEach((h) => {
-        const st = Store.getStatus(key, h.id);
-        if (st === 'done') done++; else if (st === 'skipped') skipped++;
+        const e = Store.getEntry(key, h.id);
+        const st = entryStatus(e);
+        if (st === 'skipped') { skipped++; return; }
+        credit += entryCredit(e);
+        if (st === 'done') done++; else if (st === 'partial') partial++;
       });
       const eligible = habits.length - skipped;
-      return { key, date, habits, scheduled: habits.length, done, skipped, eligible, rate: eligible > 0 ? done / eligible : null };
+      return { key, date, habits, scheduled: habits.length, done, partial, skipped, eligible, credit, rate: eligible > 0 ? credit / eligible : null };
     });
   },
 
@@ -972,9 +1065,9 @@ const Stats = {
     return out;
   },
   aggregate(days) {
-    let done = 0, eligible = 0, skipped = 0, scheduled = 0;
-    days.forEach((d) => { done += d.done; eligible += d.eligible; skipped += d.skipped; scheduled += d.scheduled; });
-    return { done, eligible, skipped, scheduled, missed: eligible - done, rate: eligible > 0 ? done / eligible : null };
+    let done = 0, partial = 0, eligible = 0, skipped = 0, scheduled = 0, credit = 0;
+    days.forEach((d) => { done += d.done; partial += d.partial; eligible += d.eligible; skipped += d.skipped; scheduled += d.scheduled; credit += d.credit; });
+    return { done, partial, eligible, skipped, scheduled, credit, missed: eligible - done - partial, rate: eligible > 0 ? credit / eligible : null };
   },
   overall() {
     return this.memo('overall', () => {
@@ -1038,16 +1131,21 @@ const Stats = {
     const from = maxKey(toKey(start), h.startDate);
     const to = toKey(end);
     return this.memo(`hr:${h.id}:${from}:${to}`, () => {
-      let done = 0, skipped = 0, scheduled = 0;
+      let done = 0, partial = 0, skipped = 0, scheduled = 0, credit = 0, valueSum = 0, valueDays = 0;
       for (let d = fromKey(from); toKey(d) <= to; d = addDays(d, 1)) {
         const key = toKey(d);
         if (!this.isScheduled(h, d, key)) continue;
         scheduled++;
-        const st = Store.getStatus(key, h.id);
-        if (st === 'done') done++; else if (st === 'skipped') skipped++;
+        const e = Store.getEntry(key, h.id);
+        const st = entryStatus(e);
+        if (st === 'skipped') { skipped++; continue; }
+        credit += entryCredit(e);
+        if (st === 'done') done++; else if (st === 'partial') partial++;
+        if (e && typeof e === 'object') { valueSum += e.v; valueDays++; }
       }
       const eligible = scheduled - skipped;
-      return { done, skipped, scheduled, eligible, rate: eligible > 0 ? done / eligible : null };
+      // avg = average actual amount on the days a value was recorded
+      return { done, partial, skipped, scheduled, eligible, credit, rate: eligible > 0 ? credit / eligible : null, avg: valueDays ? valueSum / valueDays : null, valueDays };
     });
   },
 
@@ -1350,7 +1448,7 @@ function renderToday() {
   const filtered = habits.filter((h) => {
     const st = Store.getStatus(tk, h.id);
     if (UI.todayFilter === 'done') return st === 'done';
-    if (UI.todayFilter === 'pending') return !st;
+    if (UI.todayFilter === 'pending') return st !== 'done' && st !== 'skipped';
     return true;
   });
   if (!filtered.length) {
@@ -1363,15 +1461,43 @@ function renderToday() {
 }
 
 function todayItemHtml(h, tk) {
-  const st = Store.getStatus(tk, h.id);
+  const entry = Store.getEntry(tk, h.id);
+  const st = entryStatus(entry);
   const wp = Stats.weekProgress(h);
   const streak = Stats.habitStreak(h).current;
+  const id = escapeHtml(h.id);
+  const name = escapeHtml(h.name);
+  const a = (key) => escapeHtml(t(key, { name: h.name }));
+  const flame = streak ? `<span class="flame" title="${escapeHtml(t('inARow', { days: tn('nDays', streak) }))}">${iconSpan('flame')}${streak}</span>` : '';
+  const skipBtn = `<button type="button" class="icon-btn skip-btn ${st === 'skipped' ? 'active' : ''}" data-action="skip-today" data-id="${id}"
+      title="${escapeHtml(st === 'skipped' ? t('undoSkip') : t('skipToday'))}" aria-label="${st === 'skipped' ? a('undoSkipFor') : a('skipNameToday')}">${iconSpan('skip')}</button>`;
+
+  if (isMeasured(h)) {
+    // Target, actual amount, progress and level for today
+    const ev = evaluate(h, entry);
+    const desc = [t('targetAmount', { amount: fmtAmount(h.target, h.unit) }), h.description].filter(Boolean).join(' · ');
+    const progress = st === 'skipped' ? `<span>${escapeHtml(t('statusSkipped'))}</span>`
+      : ev ? `<div class="bar lv${ev.level}"><span style="width:${ev.bar}%"></span></div><span class="pct">${ev.pct}%</span><span class="level lv${ev.level}">${escapeHtml(ev.label)}</span>`
+      : st === 'done' ? `<div class="bar lv4"><span style="width:100%"></span></div><span class="level lv4">${escapeHtml(t('lvAchieved'))}</span>`
+      : `<div class="bar"><span style="width:0%"></span></div><span>${escapeHtml(t('notRecorded'))}</span>`;
+    return `<li class="habit-item measured ${st ? `is-${st}` : ''}" data-habit="${id}" style="--c:${escapeHtml(h.color)}">
+    <button type="button" class="check ${st === 'done' ? 'checked' : ''}" data-action="toggle-today" data-id="${id}"
+      role="checkbox" aria-checked="${st === 'done'}" aria-label="${a('markReached')}">${iconSpan('check')}</button>
+    ${habitIconHtml(h)}
+    <div class="habit-info">
+      <div class="habit-name">${name}</div>
+      <div class="habit-desc">${escapeHtml(desc)}</div>
+      <div class="habit-progress">${progress}${flame}</div>
+    </div>
+    <label class="amount"><input type="number" class="amount-input" data-amount data-id="${id}" data-date="${tk}" min="0" step="any" inputmode="decimal"
+      value="${ev ? fmtValue(ev.value) : ''}" placeholder="0" aria-label="${a('actualFor')}" /><span>${escapeHtml(unitLabel(h.unit))}</span></label>
+    ${skipBtn}
+  </li>`;
+  }
+
   const label = st === 'done' ? t('statusDone') : st === 'skipped' ? t('statusSkipped') : t('statusTodo');
-  const rawName = h.name;
-  const name = escapeHtml(rawName);
-  const a = (key) => escapeHtml(t(key, { name: rawName }));
-  return `<li class="habit-item ${st ? `is-${st}` : ''}" data-habit="${escapeHtml(h.id)}" style="--c:${escapeHtml(h.color)}">
-    <button type="button" class="check ${st === 'done' ? 'checked' : ''}" data-action="toggle-today" data-id="${escapeHtml(h.id)}"
+  return `<li class="habit-item ${st ? `is-${st}` : ''}" data-habit="${id}" style="--c:${escapeHtml(h.color)}">
+    <button type="button" class="check ${st === 'done' ? 'checked' : ''}" data-action="toggle-today" data-id="${id}"
       role="checkbox" aria-checked="${st === 'done'}" aria-label="${a('markDone')}">${iconSpan('check')}</button>
     ${habitIconHtml(h)}
     <div class="habit-info">
@@ -1380,16 +1506,15 @@ function todayItemHtml(h, tk) {
       <div class="habit-progress">
         <div class="bar"><span style="width:${clamp(wp.done / wp.target, 0, 1) * 100}%"></span></div>
         <span>${escapeHtml(t('weekProgress', { done: wp.done, target: wp.target }))}</span>
-        ${streak ? `<span class="flame" title="${escapeHtml(t('inARow', { days: tn('nDays', streak) }))}">${iconSpan('flame')}${streak}</span>` : ''}
+        ${flame}
       </div>
     </div>
     <span class="status-pill ${st === 'done' ? 'done' : ''}">${escapeHtml(label)}</span>
-    <button type="button" class="icon-btn skip-btn ${st === 'skipped' ? 'active' : ''}" data-action="skip-today" data-id="${escapeHtml(h.id)}"
-      title="${escapeHtml(st === 'skipped' ? t('undoSkip') : t('skipToday'))}" aria-label="${st === 'skipped' ? a('undoSkipFor') : a('skipNameToday')}">${iconSpan('skip')}</button>
+    ${skipBtn}
   </li>`;
 }
 
-/** Patch one row in place so the checkbox animation isn't interrupted by a re-render. */
+/** Patch one row in place so the checkbox animation (and a focused amount field) isn't interrupted by a re-render. */
 function patchTodayItem(id, pop) {
   const li = $$('#todayList [data-habit]').find((el) => el.dataset.habit === id);
   const h = Store.getHabit(id);
@@ -1403,21 +1528,45 @@ function patchTodayItem(id, pop) {
   check.setAttribute('aria-checked', freshCheck.getAttribute('aria-checked'));
   if (pop) { void check.offsetWidth; check.classList.add('pop'); }
   li.className = fresh.className;
-  li.querySelector('.habit-info').replaceWith(fresh.querySelector('.habit-info'));
-  li.querySelector('.status-pill').replaceWith(fresh.querySelector('.status-pill'));
-  li.querySelector('.skip-btn').replaceWith(fresh.querySelector('.skip-btn'));
+  ['.habit-info', '.status-pill', '.skip-btn'].forEach((sel) => {
+    const cur = li.querySelector(sel);
+    const next = fresh.querySelector(sel);
+    if (cur && next) cur.replaceWith(next);
+  });
+  const input = li.querySelector('.amount-input');
+  const freshInput = fresh.querySelector('.amount-input');
+  if (input && freshInput && document.activeElement !== input) input.value = freshInput.value;
   $('#todayCaption').textContent = todayCaption();
 }
+
+/** Short form of a value for a small cell (1250 → 1.3k). */
+const compactValue = (v) => (v >= 1000 ? `${String(Math.round(v / 100) / 10)}k` : fmtValue(v));
 
 function weekCellHtml(h, d, tk) {
   const key = toKey(d);
   if (key > tk) return `<td><span class="cell locked" title="${escapeHtml(t('future'))}"></span></td>`;
   if (!Stats.isScheduled(h, d, key)) return `<td><span class="cell off" title="${escapeHtml(t('notScheduled'))}"></span></td>`;
-  const st = Store.getStatus(key, h.id);
+  const entry = Store.getEntry(key, h.id);
+  const st = entryStatus(entry);
+  const dateText = fmtDate(d, { weekday: 'long', month: 'short', day: 'numeric' });
+  const id = escapeHtml(h.id);
+
+  if (isMeasured(h)) {
+    // Shows the recorded amount; tapping opens the record dialog
+    const ev = evaluate(h, entry);
+    const cls = ['cell', 'measured', st === 'skipped' ? 'skipped' : '', st === 'done' ? 'done' : '', ev ? `lv${ev.level}` : '', key === tk ? 'today' : ''].join(' ');
+    const inner = st === 'skipped' ? iconSpan('minus') : ev ? escapeHtml(compactValue(ev.value)) : st === 'done' ? iconSpan('check') : '';
+    const valueText = st === 'skipped' ? t('statusSkipped')
+      : ev ? `${fmtAmount(ev.value, h.unit)} / ${fmtAmount(ev.target, h.unit)} · ${ev.pct}% · ${ev.label}`
+      : st === 'done' ? t('statusDone') : t('notRecorded');
+    const label = escapeHtml(t('cellValue', { name: h.name, date: dateText, value: valueText }));
+    return `<td><button type="button" class="${cls}" data-action="record" data-id="${id}" data-date="${key}" aria-label="${label}" title="${label}">${inner}</button></td>`;
+  }
+
   const cls = ['cell', st || '', key === tk ? 'today' : ''].join(' ');
   const stText = st === 'done' ? t('statusDone') : st === 'skipped' ? t('statusSkipped') : t('statusNotDone');
-  const label = escapeHtml(`${h.name}, ${fmtDate(d, { weekday: 'long', month: 'short', day: 'numeric' })}: ${stText}`);
-  return `<td><button type="button" class="${cls}" data-action="cycle" data-id="${escapeHtml(h.id)}" data-date="${key}" aria-label="${label}" title="${label}">${st === 'skipped' ? iconSpan('minus') : iconSpan('check')}</button></td>`;
+  const label = escapeHtml(`${h.name}, ${dateText}: ${stText}`);
+  return `<td><button type="button" class="${cls}" data-action="cycle" data-id="${id}" data-date="${key}" aria-label="${label}" title="${label}">${st === 'skipped' ? iconSpan('minus') : iconSpan('check')}</button></td>`;
 }
 
 function renderWeekTracker() {
@@ -1554,6 +1703,7 @@ function renderHabits() {
         <div class="habit-info">
           <h3>${escapeHtml(h.name)}</h3>
           <div class="habit-desc">${escapeHtml(h.description || freqLabel(h.days))}</div>
+          ${isMeasured(h) ? `<div class="habit-target">${escapeHtml(t('targetPerDay', { amount: fmtAmount(h.target, h.unit) }))}${r.avg !== null ? ` · ${escapeHtml(t('avgAmount', { amount: fmtAmount(r.avg, h.unit) }))}` : ''}</div>` : ''}
         </div>
         <div class="card-menu">
           <button class="icon-btn" type="button" data-action="edit-habit" data-id="${id}" aria-label="${a('editName')}">${iconSpan('edit')}</button>
@@ -1626,7 +1776,7 @@ function renderDayPanel() {
   const byStatus = (st) => s.habits.filter((h) => Store.getStatus(key, h.id) === st);
   const done = byStatus('done');
   const skipped = byStatus('skipped');
-  const pending = s.habits.filter((h) => !Store.getStatus(key, h.id));
+  const pending = s.habits.filter((h) => { const st = Store.getStatus(key, h.id); return st !== 'done' && st !== 'skipped'; });
 
   const item = (h) => {
     const st = Store.getStatus(key, h.id);
@@ -1634,7 +1784,9 @@ function renderDayPanel() {
     const a = (k) => escapeHtml(t(k, { name: h.name }));
     return `<li>${habitIconHtml(h)}<span class="name">${escapeHtml(h.name)}</span>
       ${future ? '' : `<button type="button" class="icon-btn skip-btn ${st === 'skipped' ? 'active' : ''}" data-action="day-skip" data-id="${id}" aria-label="${st === 'skipped' ? a('undoSkipFor') : a('skipName')}" title="${escapeHtml(st === 'skipped' ? t('undoSkip') : t('skip'))}">${iconSpan('skip')}</button>
-      <button type="button" class="check ${st === 'done' ? 'checked' : ''}" data-action="day-toggle" data-id="${id}" role="checkbox" aria-checked="${st === 'done'}" aria-label="${a('markNameDone')}">${iconSpan('check')}</button>`}
+      ${isMeasured(h)
+        ? (() => { const ev = evaluate(h, Store.getEntry(key, h.id)); return `<button type="button" class="amount-btn ${ev ? `lv${ev.level}` : ''}" data-action="record" data-id="${id}" data-date="${key}" aria-label="${a('recordName')}" title="${escapeHtml(ev ? `${ev.pct}% · ${ev.label}` : t('record'))}">${escapeHtml(ev ? fmtAmount(ev.value, h.unit) : st === 'done' ? t('statusDone') : t('record'))}</button>`; })()
+        : `<button type="button" class="check ${st === 'done' ? 'checked' : ''}" data-action="day-toggle" data-id="${id}" role="checkbox" aria-checked="${st === 'done'}" aria-label="${a('markNameDone')}">${iconSpan('check')}</button>`}`}
     </li>`;
   };
   const section = (titleKey, list) => (list.length ? `<div class="day-section"><h3>${escapeHtml(t(titleKey))} · ${list.length}</h3><ul class="day-list">${list.map(item).join('')}</ul></div>` : '');
@@ -1964,7 +2116,11 @@ function renderHabitChart(perHabit) {
     x: { min: 0, max: 100, grid: { color: th.grid }, border: { display: false }, ticks: { color: th.text, font: { family: CHART_FONT, size: 11 }, stepSize: 25, callback: (v) => `${v}%` } },
     y: { grid: { display: false }, border: { display: false }, ticks: { color: th.ink, font: { family: CHART_FONT, size: 12, weight: '500' } } },
   };
-  opts.plugins.tooltip.callbacks = { label: (item) => { const r = rows[item.dataIndex].r; return t('tooltipDone', { pct: pct(r.rate), done: r.done, total: r.eligible }); } };
+  opts.plugins.tooltip.callbacks = {
+    label: (item) => { const r = rows[item.dataIndex].r; return t('tooltipDone', { pct: pct(r.rate), done: r.done, total: r.eligible }); },
+    // Measured habits also show the average actual amount against the target
+    afterLabel: (item) => { const x = rows[item.dataIndex]; return isMeasured(x.h) && x.r.avg !== null ? t('tooltipAvg', { avg: fmtAmount(x.r.avg, x.h.unit), target: fmtAmount(x.h.target, x.h.unit) }) : ''; },
+  };
   upsertChart('habit', $('#habitChart'), {
     type: 'bar',
     data: {
@@ -1981,15 +2137,18 @@ function renderHabitChart(perHabit) {
 }
 
 function renderDonutChart(agg) {
-  const total = agg.done + agg.skipped + agg.missed;
-  if (!prepareChartBox('donutChartBox', 'donut', agg.done + agg.skipped > 0 ? null : t('noCheckinsRange'))) return;
+  const total = agg.done + agg.partial + agg.skipped + agg.missed;
+  if (!prepareChartBox('donutChartBox', 'donut', agg.done + agg.partial + agg.skipped > 0 ? null : t('noCheckinsRange'))) return;
   const th = chartTheme();
   const share = (v) => Math.round((v / total) * 100);
+  // "Partly done" (some progress, below target) only appears when there is any
+  const slices = [[t('donutDone'), agg.done, th.accent], [t('donutPartial'), agg.partial, cssVar('--lv2')], [t('donutMissed'), agg.missed, th.low], [t('donutSkipped'), agg.skipped, th.gray]]
+    .filter((x, i) => i !== 1 || agg.partial > 0);
   upsertChart('donut', $('#donutChart'), {
     type: 'doughnut',
     data: {
-      labels: [t('donutDone'), t('donutMissed'), t('donutSkipped')],
-      datasets: [{ data: [agg.done, agg.missed, agg.skipped], backgroundColor: [th.accent, th.low, th.gray], borderColor: th.surface, borderWidth: 2, hoverOffset: 4 }],
+      labels: slices.map((x) => x[0]),
+      datasets: [{ data: slices.map((x) => x[1]), backgroundColor: slices.map((x) => x[2]), borderColor: th.surface, borderWidth: 2, hoverOffset: 4 }],
     },
     options: {
       responsive: true, maintainAspectRatio: false, cutout: '68%', animation: { duration: 550 },
@@ -2015,7 +2174,9 @@ function renderDonutChart(agg) {
    ========================================================= */
 
 /* ---------- Habit form ---------- */
-const habitForm = { editingId: null, icon: 'book', color: HABIT_COLORS[0], days: [...ALL_DAYS], minStart: minStartKey() };
+const habitForm = { editingId: null, icon: 'book', color: HABIT_COLORS[0], days: [...ALL_DAYS], minStart: minStartKey(), tracking: 'boolean' };
+const UNIT_OTHER = '__other';
+const DEFAULT_TARGET = { duration: 1, count: 10, distance: 3 };
 
 function clearErrors(form) {
   $$('.field-error', form).forEach((e) => { e.textContent = ''; });
@@ -2041,6 +2202,10 @@ function openHabitModal(id = null, template = null) {
   f.elements.startDate.min = habitForm.minStart;
   f.elements.startDate.max = todayKey();
   f.elements.active.checked = h ? h.active : true;
+  habitForm.tracking = TRACKING.includes(src.tracking) ? src.tracking : 'boolean';
+  f.elements.dailyTarget.value = habitForm.tracking !== 'boolean' && src.target ? fmtValue(src.target) : '';
+  f.elements.rule.value = src.rule || '';
+  syncTrackingFields(src.unit || '');
   $('#habitModalTitle').textContent = h ? t('editHabit') : t('newHabit');
   $('#habitSubmit').textContent = h ? t('saveChanges') : t('createHabit');
   $('#habitDeleteBtn').hidden = !h;
@@ -2060,6 +2225,27 @@ function renderHabitPickers() {
   $$('#freqPresets .chip').forEach((c) => c.classList.toggle('active',
     (c.dataset.preset === 'daily' && s === '0,1,2,3,4,5,6') || (c.dataset.preset === 'weekdays' && s === '1,2,3,4,5') || (c.dataset.preset === 'weekends' && s === '0,6')));
   syncTargetMax();
+}
+
+/** Show the target / unit / rating fields that fit the chosen tracking type. `unit` preselects a unit. */
+function syncTrackingFields(unit) {
+  const type = habitForm.tracking;
+  const measured = type !== 'boolean';
+  const f = $('#habitForm').elements;
+  $$('#trackingChoice button').forEach((b) => { const on = b.dataset.tracking === type; b.classList.toggle('active', on); b.setAttribute('aria-pressed', String(on)); });
+  $('#targetFields').hidden = !measured;
+  if (!measured) return;
+  const known = UNITS[type];
+  const current = unit !== undefined ? unit : (f.unitSelect.value === UNIT_OTHER ? f.unitCustom.value : f.unitSelect.value);
+  f.unitSelect.innerHTML = known.map((u) => `<option value="${u}">${escapeHtml(unitLabel(u))}</option>`).join('')
+    + (type === 'count' ? `<option value="${UNIT_OTHER}">${escapeHtml(t('unitOther'))}</option>` : '');
+  const custom = type === 'count' && current && !known.includes(current);
+  f.unitSelect.value = custom ? UNIT_OTHER : (known.includes(current) ? current : known[0]);
+  f.unitCustom.hidden = f.unitSelect.value !== UNIT_OTHER;
+  if (custom) f.unitCustom.value = current;
+  $('#ruleField').hidden = type !== 'duration';
+  if (type !== 'duration') f.rule.value = '';
+  if (!f.dailyTarget.value) f.dailyTarget.value = DEFAULT_TARGET[type];
 }
 
 /** Weekly target can't exceed the number of scheduled days per week. */
@@ -2084,11 +2270,23 @@ function submitHabitForm(e) {
   setErr('days', habitForm.days.length ? '' : t('errPickDay'));
   const start = el.startDate.value;
   setErr('startDate', !isDateKey(start) ? t('errChooseStart') : start > todayKey() ? t('errStartFuture') : start < habitForm.minStart ? t('errStartMin', { date: fmtDate(fromKey(habitForm.minStart), { month: 'short', day: 'numeric', year: 'numeric' }) }) : '', el.startDate);
+  // Measured habits need a daily target and a unit
+  const measured = habitForm.tracking !== 'boolean';
+  const dailyTarget = measured ? num(el.dailyTarget.value, 0, MAX_VALUE, null) : 1;
+  const unit = !measured ? '' : el.unitSelect.value === UNIT_OTHER ? str(el.unitCustom.value, 12) : el.unitSelect.value;
+  if (measured) {
+    setErr('dailyTarget', dailyTarget !== null && dailyTarget > 0 ? '' : t('errDailyTarget'), el.dailyTarget);
+    setErr('unit', unit ? '' : t('errUnit'), el.unitCustom);
+  }
   if (!valid) return;
 
   const data = {
     name,
     description: el.description.value.trim(),
+    tracking: habitForm.tracking,
+    target: dailyTarget,
+    unit,
+    rule: habitForm.tracking === 'duration' ? el.rule.value : '',
     icon: habitForm.icon,
     color: habitForm.color,
     days: [...habitForm.days].sort(),
@@ -2241,7 +2439,7 @@ function download(filename, text) {
 function exportData() {
   const s = Store.state;
   const logs = [];
-  Object.entries(s.logs).forEach(([date, day]) => Object.entries(day).forEach(([habitId, status]) => logs.push({ habitId, date, status })));
+  Object.entries(s.logs).forEach(([date, day]) => Object.entries(day).forEach(([habitId, e]) => logs.push(typeof e === 'object' ? { habitId, date, value: e.v, target: e.t } : { habitId, date, status: e })));
   const payload = { app: 'cadence', version: 2, exportedAt: nowIso(), profile: s.profile, habits: s.habits, goals: s.goals, logs };
   download(`cadence-backup-${todayKey()}.json`, JSON.stringify(payload, null, 2));
   toast(t('backupDownloaded'), 'download');
@@ -2569,11 +2767,70 @@ function onAuthChange(user) {
    14. Events & boot
    ========================================================= */
 
-/** Change a check-in, with feedback when the streak grows or the day is complete. */
-function setHabitStatus(dateKey, habitId, status) {
+/* ---------- Record dialog: actual amount for a measured habit on one day ---------- */
+const recordForm = { habitId: null, date: null, target: 1 };
+
+/** Quick-pick amounts around the target (e.g. 5–9 h for an 8 h goal). */
+function recordChipValues(h, target) {
+  const whole = h.tracking === 'count';
+  const vals = h.unit === 'h' && target >= 4
+    ? [target - 3, target - 2, target - 1, target, target + 1]
+    : [0.25, 0.5, 0.75, 1, 1.25].map((f) => target * f);
+  return [...new Set(vals.map((v) => (whole ? Math.round(v) : Math.round(v * 100) / 100)).filter((v) => v > 0))];
+}
+
+function openRecordModal(id, dateKey) {
+  const h = Store.getHabit(id);
+  if (!h || !isMeasured(h) || !isDateKey(dateKey) || dateKey > todayKey()) return;
+  const entry = Store.getEntry(dateKey, id);
+  const hasValue = entry && typeof entry === 'object';
+  recordForm.habitId = id;
+  recordForm.date = dateKey;
+  recordForm.target = hasValue ? entry.t : h.target; // a past day keeps the target it was measured against
+  const f = $('#recordForm');
+  clearErrors(f);
+  $('#recordTitle').textContent = h.name;
+  $('#recordDate').textContent = fmtLong(fromKey(dateKey));
+  $('#recordTarget').textContent = fmtAmount(recordForm.target, h.unit);
+  $('#recordUnit').textContent = unitLabel(h.unit);
+  $('#recordValue').value = hasValue ? fmtValue(entry.v) : '';
+  $('#recordValue').setAttribute('aria-label', t('actualFor', { name: h.name }));
+  $('#recordChips').innerHTML = recordChipValues(h, recordForm.target)
+    .map((v) => `<button type="button" class="chip" data-chip="${v}">${escapeHtml(fmtAmount(v, h.unit))}</button>`).join('');
+  $('#recordClear').hidden = entry === null;
+  updateRecordPreview();
+  $('#recordModal').showModal();
+  if (!matchMedia('(max-width: 760px)').matches) { $('#recordValue').focus(); $('#recordValue').select(); }
+}
+
+function updateRecordPreview() {
+  const h = Store.getHabit(recordForm.habitId);
+  if (!h) return;
+  const v = num($('#recordValue').value, 0, MAX_VALUE, null);
+  const ev = v === null ? null : evaluate(h, { v, t: recordForm.target });
+  $('#recordBar').className = `bar ${ev ? `lv${ev.level}` : ''}`;
+  $('#recordBar').firstElementChild.style.width = `${ev ? ev.bar : 0}%`;
+  $('#recordPct').textContent = ev ? `${ev.pct}%` : '—';
+  $('#recordLevel').className = `level ${ev ? `lv${ev.level}` : ''}`;
+  $('#recordLevel').textContent = ev ? ev.label : t('notRecorded');
+  $$('#recordChips .chip').forEach((c) => c.classList.toggle('active', v !== null && Number(c.dataset.chip) === v));
+}
+
+function submitRecordForm(e) {
+  e.preventDefault();
+  const input = $('#recordValue');
+  const v = num(input.value, 0, MAX_VALUE, null);
+  const err = $('[data-error-for="recordValue"]');
+  if (v === null || Number(input.value) < 0) { err.textContent = t('errActual'); input.classList.add('invalid'); return; }
+  $('#recordModal').close();
+  recordEntry(recordForm.date, recordForm.habitId, { v, t: recordForm.target });
+}
+
+/** Change a check-in ('done' | 'skipped' | { v, t } | null), with feedback when the streak grows or the day is complete. */
+function recordEntry(dateKey, habitId, entry) {
   const beforeStreak = Stats.streaks().current;
   const beforeRate = Stats.day(fromKey(dateKey)).rate;
-  Store.setStatus(dateKey, habitId, status);
+  Store.setEntry(dateKey, habitId, entry);
   const afterStreak = Stats.streaks().current;
   const after = Stats.day(fromKey(dateKey));
   if (afterStreak > beforeStreak) {
@@ -2609,8 +2866,11 @@ const actions = {
   'toggle-today': (el) => {
     const id = el.dataset.id;
     const tk = todayKey();
-    const next = Store.getStatus(tk, id) === 'done' ? null : 'done';
-    quietly(() => setHabitStatus(tk, id, next));
+    const h = Store.getHabit(id);
+    if (!h) return;
+    // Measured habits: the tick means "reached today's target"
+    const next = Store.getStatus(tk, id) === 'done' ? null : isMeasured(h) ? { v: h.target, t: h.target } : 'done';
+    quietly(() => recordEntry(tk, id, next));
     if (UI.todayFilter === 'all') patchTodayItem(id, Boolean(next));
     else { el.classList.toggle('checked', Boolean(next)); if (next) el.classList.add('pop'); setTimeout(renderToday, 350); } // let the tick play before the row filters out
     renderDashboard({ skipToday: true });
@@ -2619,7 +2879,7 @@ const actions = {
     const id = el.dataset.id;
     const tk = todayKey();
     const next = Store.getStatus(tk, id) === 'skipped' ? null : 'skipped';
-    quietly(() => setHabitStatus(tk, id, next));
+    quietly(() => recordEntry(tk, id, next));
     renderDashboard();
     if (next) toast(t('skippedToast'), 'skip');
   },
@@ -2627,7 +2887,7 @@ const actions = {
     const { id, date } = el.dataset;
     const cur = Store.getStatus(date, id);
     const next = cur === null ? 'done' : cur === 'done' ? 'skipped' : null;
-    quietly(() => setHabitStatus(date, id, next));
+    quietly(() => recordEntry(date, id, next));
     el.className = ['cell', next || '', date === todayKey() ? 'today' : ''].join(' ');
     el.innerHTML = next === 'skipped' ? iconSpan('minus') : iconSpan('check');
     if (next) { void el.offsetWidth; el.classList.add('pop'); }
@@ -2655,8 +2915,9 @@ const actions = {
     }
     if (matchMedia('(max-width: 1080px)').matches) $('#dayPanel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   },
-  'day-toggle': (el) => setHabitStatus(UI.calSelected, el.dataset.id, Store.getStatus(UI.calSelected, el.dataset.id) === 'done' ? null : 'done'),
-  'day-skip': (el) => setHabitStatus(UI.calSelected, el.dataset.id, Store.getStatus(UI.calSelected, el.dataset.id) === 'skipped' ? null : 'skipped'),
+  'day-toggle': (el) => recordEntry(UI.calSelected, el.dataset.id, Store.getStatus(UI.calSelected, el.dataset.id) === 'done' ? null : 'done'),
+  'day-skip': (el) => recordEntry(UI.calSelected, el.dataset.id, Store.getStatus(UI.calSelected, el.dataset.id) === 'skipped' ? null : 'skipped'),
+  record: (el) => openRecordModal(el.dataset.id, el.dataset.date),
 
   export: exportData,
   'clear-all': async () => {
@@ -2710,6 +2971,19 @@ function bindEvents() {
 
   document.addEventListener('change', (e) => {
     const el = e.target;
+    // Today's list: actual amount typed straight into the row
+    if (el.matches('[data-amount]')) {
+      const h = Store.getHabit(el.dataset.id);
+      if (!h) return;
+      const raw = el.value.trim();
+      const v = raw === '' ? null : num(raw, 0, MAX_VALUE, null);
+      if (raw !== '' && (v === null || Number(raw) < 0)) { el.value = ''; return; }
+      const entry = v === null ? null : { v, t: h.target };
+      quietly(() => recordEntry(el.dataset.date, h.id, entry));
+      if (UI.todayFilter === 'all') patchTodayItem(h.id, entryStatus(entry) === 'done'); else setTimeout(renderToday, 350);
+      renderDashboard({ skipToday: true });
+      return;
+    }
     if (el.matches('[data-action="toggle-active"]')) {
       Store.updateHabit(el.dataset.id, { active: el.checked });
       toast(el.checked ? t('habitResumed') : t('habitPaused'), el.checked ? 'refresh' : 'clock');
@@ -2784,6 +3058,22 @@ function bindEvents() {
   $('#habitDeleteBtn').addEventListener('click', () => deleteHabit(habitForm.editingId));
   hf.elements.habitName.addEventListener('input', () => { hf.elements.habitName.classList.remove('invalid'); $('[data-error-for="habitName"]', hf).textContent = ''; });
 
+  // Tracking type + unit
+  $('#trackingChoice').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-tracking]'); if (!b) return;
+    if (habitForm.tracking !== b.dataset.tracking) { habitForm.tracking = b.dataset.tracking; hf.elements.dailyTarget.value = ''; syncTrackingFields(''); }
+    clearErrors($('#targetFields'));
+  });
+  $('#habitUnit').addEventListener('change', () => { const other = $('#habitUnit').value === UNIT_OTHER; $('#habitUnitCustom').hidden = !other; if (other) $('#habitUnitCustom').focus(); });
+
+  // Record dialog (actual amount for a day)
+  $('#recordForm').addEventListener('submit', submitRecordForm);
+  $('#recordValue').addEventListener('input', () => { $('#recordValue').classList.remove('invalid'); $('[data-error-for="recordValue"]').textContent = ''; updateRecordPreview(); });
+  $('#recordChips').addEventListener('click', (e) => { const c = e.target.closest('[data-chip]'); if (c) { $('#recordValue').value = c.dataset.chip; updateRecordPreview(); } });
+  $('#recordClear').addEventListener('click', () => { $('#recordModal').close(); recordEntry(recordForm.date, recordForm.habitId, null); });
+  $('#recordSkip').addEventListener('click', () => { $('#recordModal').close(); recordEntry(recordForm.date, recordForm.habitId, 'skipped'); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches?.('[data-amount]')) e.target.blur(); });
+
   // Goal modal
   $('#goalForm').addEventListener('submit', submitGoalForm);
   $('#goalModeChoice').addEventListener('click', (e) => { const b = e.target.closest('[data-mode]'); if (b && !b.disabled) { goalForm.mode = b.dataset.mode; syncGoalMode(); } });
@@ -2792,7 +3082,7 @@ function bindEvents() {
   // Close buttons; backdrop click closes editors (not confirmations)
   $$('dialog.modal').forEach((dlg) => {
     $$('[data-close]', dlg).forEach((b) => b.addEventListener('click', () => dlg.close()));
-    dlg.addEventListener('click', (e) => { if (e.target === dlg && (dlg.id === 'habitModal' || dlg.id === 'goalModal')) dlg.close(); });
+    dlg.addEventListener('click', (e) => { if (e.target === dlg && ['habitModal', 'goalModal', 'recordModal'].includes(dlg.id)) dlg.close(); });
   });
 
   // Settings
@@ -2879,7 +3169,8 @@ function setLanguage(lang, { save = true, render = true } = {}) {
   if (!render) return;
   applyTheme(Prefs.data.theme); // theme labels
   if (!$('#auth').hidden) setAuthTab(Auth.tab);
-  if ($('#habitModal').open) { $('#habitModalTitle').textContent = habitForm.editingId ? t('editHabit') : t('newHabit'); $('#habitSubmit').textContent = habitForm.editingId ? t('saveChanges') : t('createHabit'); renderHabitPickers(); }
+  if ($('#habitModal').open) { $('#habitModalTitle').textContent = habitForm.editingId ? t('editHabit') : t('newHabit'); $('#habitSubmit').textContent = habitForm.editingId ? t('saveChanges') : t('createHabit'); renderHabitPickers(); syncTrackingFields(); }
+  if ($('#recordModal').open) openRecordModal(recordForm.habitId, recordForm.date);
   if ($('#goalModal').open) { $('#goalModalTitle').textContent = goalForm.editingId ? t('editGoal') : t('newGoal'); $('#goalSubmit').textContent = goalForm.editingId ? t('saveChanges') : t('createGoal'); }
   destroyCharts();
   if (Store.ns && !$('#app').hidden) { renderHeader(); renderView(); renderSyncStatus(); }

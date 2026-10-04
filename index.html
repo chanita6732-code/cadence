@@ -490,6 +490,35 @@
           <input id="habitDesc" name="description" type="text" maxlength="80" placeholder="A short note to keep you on track" data-i18n-ph="descriptionPlaceholder" />
         </div>
         <div class="field">
+          <span class="field-label" data-i18n="trackingType">How to track</span>
+          <div class="segmented full" id="trackingChoice">
+            <button type="button" data-tracking="boolean" data-i18n="typeBoolean">Yes / No</button>
+            <button type="button" data-tracking="duration" data-i18n="typeDuration">Time</button>
+            <button type="button" data-tracking="count" data-i18n="typeCount">Count</button>
+            <button type="button" data-tracking="distance" data-i18n="typeDistance">Distance</button>
+          </div>
+        </div>
+        <div class="field-row" id="targetFields" hidden>
+          <div class="field">
+            <label for="habitDailyTarget" data-i18n="dailyTarget">Daily target</label>
+            <input id="habitDailyTarget" name="dailyTarget" type="number" min="0" step="any" inputmode="decimal" />
+            <p class="field-error" data-error-for="dailyTarget"></p>
+          </div>
+          <div class="field">
+            <label for="habitUnit" data-i18n="unit">Unit</label>
+            <select id="habitUnit" name="unitSelect"></select>
+            <input id="habitUnitCustom" name="unitCustom" type="text" maxlength="12" placeholder="e.g. chapters" data-i18n-ph="unitCustomPlaceholder" data-i18n-aria="unit" hidden />
+            <p class="field-error" data-error-for="unit"></p>
+          </div>
+          <div class="field" id="ruleField" hidden>
+            <label for="habitRule" data-i18n="ratingScale">Rating</label>
+            <select id="habitRule" name="rule">
+              <option value="" data-i18n="ruleStandard">Standard (% of target)</option>
+              <option value="sleep" data-i18n="ruleSleep">Sleep scale (by hours)</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
           <span class="field-label" data-i18n="icon">Icon</span>
           <div class="icon-picker" id="iconPicker"></div>
         </div>
@@ -599,6 +628,42 @@
         <span class="spacer"></span>
         <button class="btn btn-ghost" type="button" data-close data-i18n="cancel">Cancel</button>
         <button class="btn btn-primary" type="submit" id="goalSubmit">Create goal</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ============ Record a measured habit (actual vs target) ============ -->
+  <dialog class="modal modal-sm" id="recordModal" aria-labelledby="recordTitle">
+    <form id="recordForm" class="form" method="dialog" novalidate>
+      <div class="modal-head">
+        <div>
+          <h2 id="recordTitle">Record</h2>
+          <p class="muted small" id="recordDate"></p>
+        </div>
+        <button class="icon-btn" type="button" data-close aria-label="Close" data-i18n-aria="close"><span class="i" data-icon="x"></span></button>
+      </div>
+      <div class="modal-body">
+        <p class="record-target"><span data-i18n="target">Target</span> <strong id="recordTarget"></strong></p>
+        <div class="field">
+          <label for="recordValue" data-i18n="actual">Actual</label>
+          <div class="amount lg">
+            <input id="recordValue" type="number" min="0" step="any" inputmode="decimal" />
+            <span id="recordUnit"></span>
+          </div>
+          <div class="chip-row" id="recordChips"></div>
+          <p class="field-error" data-error-for="recordValue"></p>
+        </div>
+        <div class="habit-progress record-progress">
+          <div class="bar" id="recordBar"><span style="width:0"></span></div>
+          <span class="pct" id="recordPct">—</span>
+          <span class="level" id="recordLevel"></span>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-danger-ghost" type="button" id="recordClear" data-i18n="clear">Clear</button>
+        <span class="spacer"></span>
+        <button class="btn btn-ghost" type="button" id="recordSkip" data-i18n="skip">Skip</button>
+        <button class="btn btn-primary" type="submit" data-i18n="save">Save</button>
       </div>
     </form>
   </dialog>
