@@ -1332,7 +1332,10 @@ function route() {
   const order = Object.keys(VIEWS);
   const root = document.documentElement;
   root.dataset.nav = order.indexOf(next) > order.indexOf(from) ? 'forward' : 'back';
-  const transition = document.startViewTransition(swap);
+  const transition = document.startViewTransition(() => {
+    chartQueue = new Map();
+    try { swap(); } finally { setTimeout(flushCharts, 60); }
+  });
   route.transition = transition;
   transition.finished.catch(() => {}).then(() => { if (route.transition === transition) delete root.dataset.nav; });
 }
@@ -2027,7 +2030,17 @@ function prepareChartBox(boxId, key, emptyMsg) {
   return true;
 }
 
+/* During a page transition charts are built just after the slide starts, so the
+   new page appears without waiting for them (see route()). */
+let chartQueue = null;
+function flushCharts() {
+  const jobs = chartQueue;
+  chartQueue = null;
+  jobs?.forEach(([key, canvas, config]) => { if (canvas.offsetParent) upsertChart(key, canvas, config); });
+}
+
 function upsertChart(key, canvas, config) {
+  if (chartQueue) { chartQueue.set(key, [key, canvas, config]); return; }
   const existing = charts[key];
   if (existing && existing.canvas === canvas && existing.config.type === config.type) {
     existing.data.labels = config.data.labels;
@@ -2435,11 +2448,9 @@ const appGridColors = () => ({ borderColor: cssVar('--grid-line-app'), hoverFill
 function initGrids() {
   if (authGrid || typeof createShapeGrid !== 'function') return;
   const base = { shape: 'hexagon', squareSize: 23, direction: 'diagonal', speed: 0.5, hoverTrailAmount: 5 };
-  // Touch devices have no hover and stay open longer, so cap the frame rate there to save battery
-  const fps = matchMedia('(hover: none)').matches ? 30 : 0;
   // The pointer is tracked on the whole screen so content on top doesn't block the highlight
   authGrid = createShapeGrid($('#authGrid'), { ...base, eventTarget: $('#auth'), ...gridColors() });
-  appGrid = createShapeGrid($('#appGrid'), { ...base, fps, eventTarget: $('#app'), ...appGridColors() });
+  appGrid = createShapeGrid($('#appGrid'), { ...base, eventTarget: $('#app'), ...appGridColors() });
 }
 
 /* ---------- Theme (per device) ---------- */

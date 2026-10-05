@@ -168,7 +168,7 @@ code { font-size: .92em; padding: 1px 5px; border-radius: 5px; background: var(-
   animation: viewIn .4s var(--ease);
 }
 /* Animated hexagon grid behind the sign-in card; fades out toward the edges */
-.shapegrid-canvas { width: 100%; height: 100%; border: none; display: block; }
+.shapegrid { overflow: hidden; contain: strict; } /* shapegrid.js puts its canvas inside and slides it */
 .auth-grid {
   position: fixed; inset: 0; z-index: 0; pointer-events: none;
   -webkit-mask-image: radial-gradient(ellipse at center, #000 35%, transparent 90%);
@@ -306,6 +306,8 @@ code { font-size: .92em; padding: 1px 5px; border-radius: 5px; background: var(-
 }
 .dock-item:hover .dock-label, .dock-item:focus-visible .dock-label { opacity: 1; transform: translate(-50%, -10px); }
 @media (hover: none) { .dock-label { display: none; } }
+/* Blurring what's behind the dock is redone on every frame of the moving background: too heavy for phones */
+@media (hover: none) { .dock-panel { -webkit-backdrop-filter: none; backdrop-filter: none; background: color-mix(in srgb, var(--surface) 94%, transparent); } }
 @media (max-width: 760px) {
   .dock { bottom: calc(8px + env(safe-area-inset-bottom)); }
   .dock-panel { gap: 6px; padding: 0 8px 7px; height: calc(var(--dock-size) + 14px); border-radius: 18px; }
