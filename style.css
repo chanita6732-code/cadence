@@ -42,6 +42,7 @@
   --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 30px rgba(3, 6, 20, .25);
   --shadow-lg: 0 30px 70px rgba(2, 4, 16, .6);
   --lv0: #f07a8a; --lv1: #f0935a; --lv2: #f0b75a; --lv3: #9181ff; --lv4: #4ade80; /* achievement levels: very low → achieved */
+  --grid-line: rgba(145, 129, 255, .13); --grid-hover: rgba(124, 92, 255, .30); /* sign-in background grid */
   --hm-0: #1b2140;
   --hm-1: #2f2a6e;
   --hm-2: #4a3da8;
@@ -73,6 +74,7 @@
   --shadow: 0 1px 2px rgba(21, 25, 54, .04), 0 8px 24px rgba(21, 25, 54, .06);
   --shadow-lg: 0 30px 70px rgba(21, 25, 54, .2);
   --lv0: #d0384f; --lv1: #c8601f; --lv2: #a86b00; --lv3: #5b45e0; --lv4: #15803d;
+  --grid-line: rgba(91, 69, 224, .13); --grid-hover: rgba(91, 69, 224, .16);
   --hm-0: #ebebf6;
   --hm-1: #d9d2fd;
   --hm-2: #ab9cf7;
@@ -152,12 +154,21 @@ code { font-size: .92em; padding: 1px 5px; border-radius: 5px; background: var(-
 
 /* ---------- Auth ---------- */
 .auth {
+  position: relative;
   min-height: var(--vh);
   display: grid; place-items: center;
   padding: 24px 16px calc(24px + env(safe-area-inset-bottom));
   animation: viewIn .4s var(--ease);
 }
+/* Animated hexagon grid behind the sign-in card; fades out toward the edges */
+.shapegrid-canvas { width: 100%; height: 100%; border: none; display: block; }
+.auth-grid {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  -webkit-mask-image: radial-gradient(ellipse at center, #000 35%, transparent 90%);
+  mask-image: radial-gradient(ellipse at center, #000 35%, transparent 90%);
+}
 .auth-card {
+  position: relative; z-index: 1;
   width: min(420px, 100%);
   background: var(--surface); border: 1px solid var(--border); border-radius: 22px;
   padding: 28px; box-shadow: var(--shadow-lg);
@@ -938,6 +949,8 @@ button.cell:active { transform: scale(.88); }
   .toasts { left: 16px; right: 16px; bottom: calc(84px + env(safe-area-inset-bottom)); align-items: center; }
   .toast { width: 100%; max-width: none; }
   .auth-card { padding: 22px; border-radius: 20px; }
+  /* The card fills most of a phone screen, so keep the grid visible right to the edges */
+  .auth-grid { -webkit-mask-image: none; mask-image: none; }
 }
 
 @media (max-width: 350px) {

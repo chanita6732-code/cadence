@@ -179,6 +179,7 @@ config.js               ใส่ค่า Firebase ที่นี่
 i18n.js                 ข้อความภาษาอังกฤษ / ไทย ทั้งหมด (แก้คำแปลที่นี่)
 firestore.rules         กฎความปลอดภัยของฐานข้อมูล
 firebase.json           สำหรับ Firebase Hosting / Emulator (ไม่บังคับ)
+shapegrid.js            พื้นหลังลายหกเหลี่ยมเคลื่อนไหวของหน้าเข้าสู่ระบบ (แปลงจาก ShapeGrid ของ React Bits)
 sw.js                   Service Worker (ใช้งานออฟไลน์)
 manifest.webmanifest    ข้อมูลสำหรับติดตั้งเป็นแอป
 icons/                  ไอคอนแอป

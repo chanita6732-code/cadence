@@ -2408,6 +2408,15 @@ function adjustGoal(id, delta) {
   if (after && !before && Stats.goalProgress(after).completed) toast(t('goalReached', { name: g.title }), 'award');
 }
 
+/* ---------- Sign-in background grid (shapegrid.js) ---------- */
+let authGrid = null;
+const gridColors = () => ({ borderColor: cssVar('--grid-line'), hoverFillColor: cssVar('--grid-hover') });
+function initAuthGrid() {
+  if (authGrid || typeof createShapeGrid !== 'function') return;
+  // Pointer is tracked on the whole sign-in screen so the card on top doesn't block the highlight
+  authGrid = createShapeGrid($('#authGrid'), { shape: 'hexagon', squareSize: 23, direction: 'diagonal', speed: 0.5, hoverTrailAmount: 5, eventTarget: $('#auth'), ...gridColors() });
+}
+
 /* ---------- Theme (per device) ---------- */
 function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
@@ -2415,6 +2424,7 @@ function applyTheme(theme) {
   $$('.theme-label').forEach((el) => { el.textContent = dark ? t('darkMode') : t('lightMode'); });
   $$('.theme-icon').forEach((el) => { el.innerHTML = icon(dark ? 'moon' : 'sun'); });
   $('meta[name="theme-color"]').setAttribute('content', dark ? '#0a0e1f' : '#f4f4fb');
+  authGrid?.update(gridColors());
 }
 
 function setTheme(theme) {
@@ -3186,6 +3196,7 @@ async function boot() {
   Prefs.load();
   setLanguage(Prefs.data.lang || detectLanguage(), { save: false, render: false });
   applyTheme(Prefs.data.theme);
+  initAuthGrid();
   bindEvents();
   Cloud.init();
 
