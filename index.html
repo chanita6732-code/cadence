@@ -22,7 +22,7 @@
   </script>
   <link rel="stylesheet" href="vendor/inter-font.css" />
   <link rel="stylesheet" href="vendor/noto-sans-thai-font.css" />
-  <link rel="stylesheet" href="style.css?v=2.5.3" />
+  <link rel="stylesheet" href="style.css?v=2.5.4" />
 </head>
 <body>
   <!-- Shared SVG gradient used by progress rings -->
@@ -123,40 +123,6 @@
     <!-- Decorative hexagon grid behind every app page (shapegrid.js) -->
     <canvas class="shapegrid-canvas app-grid" id="appGrid" aria-hidden="true" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none"></canvas>
     <!-- ============ Sidebar (desktop / tablet) ============ -->
-    <aside class="sidebar" aria-label="Main navigation" data-i18n-aria="mainNav">
-      <a class="brand" href="#dashboard">
-        <span class="brand-mark" aria-hidden="true"></span>
-        <span class="brand-name">Cadence</span>
-      </a>
-
-      <nav class="nav">
-        <a class="nav-link" href="#dashboard" data-view="dashboard"><span class="i" data-icon="dashboard"></span><span class="label" data-i18n="navDashboard">Dashboard</span></a>
-        <a class="nav-link" href="#habits" data-view="habits"><span class="i" data-icon="habits"></span><span class="label" data-i18n="navHabits">Habits</span></a>
-        <a class="nav-link" href="#calendar" data-view="calendar"><span class="i" data-icon="calendar"></span><span class="label" data-i18n="navCalendar">Calendar</span></a>
-        <a class="nav-link" href="#statistics" data-view="statistics"><span class="i" data-icon="stats"></span><span class="label" data-i18n="navStatistics">Statistics</span></a>
-        <a class="nav-link" href="#goals" data-view="goals"><span class="i" data-icon="target"></span><span class="label" data-i18n="navGoals">Goals</span></a>
-        <a class="nav-link" href="#settings" data-view="settings"><span class="i" data-icon="settings"></span><span class="label" data-i18n="navSettings">Settings</span></a>
-      </nav>
-
-      <div class="sidebar-footer">
-        <button class="sync-pill" type="button" data-action="sync-now" data-sync-pill>
-          <span class="sync-dot" aria-hidden="true"></span><span class="label sync-text">This device only</span>
-        </button>
-        <a class="profile" href="#settings" title="Account & settings" data-i18n-title="accountSettings">
-          <span class="avatar" data-bind="initials"></span>
-          <span class="profile-text">
-            <strong data-bind="name"></strong>
-            <small data-bind="account"></small>
-          </span>
-        </a>
-        <button class="theme-toggle" type="button" data-action="toggle-theme" aria-label="Toggle dark / light mode" data-i18n-aria="toggleTheme">
-          <span class="i theme-icon" data-icon="moon"></span>
-          <span class="label theme-label">Dark mode</span>
-          <span class="switch" aria-hidden="true"><span></span></span>
-        </button>
-      </div>
-    </aside>
-
     <!-- ============ Main ============ -->
     <main class="main" id="main">
       <div class="banner" id="saveBanner" role="alert" hidden>
@@ -166,17 +132,14 @@
 
       <header class="topbar">
         <div class="topbar-text">
+          <a class="brand" href="#dashboard"><span class="brand-mark" aria-hidden="true"></span><span class="brand-name">Cadence</span></a>
           <p class="eyebrow" id="headerDate"></p>
           <h1 id="headerTitle">Hello</h1>
           <p class="subtitle" id="headerSubtitle"></p>
         </div>
         <div class="topbar-actions">
-          <button class="icon-btn only-mobile sync-icon" type="button" data-action="sync-now" data-sync-pill aria-label="Sync status" data-i18n-aria="syncStatus">
-            <span class="sync-dot" aria-hidden="true"></span>
-          </button>
-          <button class="icon-btn only-mobile" type="button" data-action="toggle-theme" aria-label="Toggle theme" data-i18n-aria="toggleTheme"><span class="i theme-icon" data-icon="moon"></span></button>
-          <button class="btn btn-primary" type="button" data-action="add-habit" aria-label="Add habit" data-i18n-aria="addHabit">
-            <span class="i" data-icon="plus"></span><span class="hide-sm" data-i18n="addHabit">Add habit</span>
+          <button class="sync-pill" type="button" data-action="sync-now" data-sync-pill aria-label="Sync status" data-i18n-aria="syncStatus">
+            <span class="sync-dot" aria-hidden="true"></span><span class="sync-text hide-sm">This device only</span>
           </button>
           <a class="avatar-btn" href="#settings" aria-label="Account & settings" data-i18n-aria="accountSettings"><span class="avatar" data-bind="initials"></span></a>
         </div>
@@ -467,13 +430,18 @@
     </main>
   </div>
 
-  <!-- ============ Bottom navigation (mobile) ============ -->
-  <nav class="bottom-nav" id="bottomNav" aria-label="Main navigation" data-i18n-aria="mainNav" hidden>
-    <a href="#dashboard" data-view="dashboard"><span class="i" data-icon="dashboard"></span><span data-i18n="navHome">Home</span></a>
-    <a href="#habits" data-view="habits"><span class="i" data-icon="habits"></span><span data-i18n="navHabits">Habits</span></a>
-    <a href="#calendar" data-view="calendar"><span class="i" data-icon="calendar"></span><span data-i18n="navCalendar">Calendar</span></a>
-    <a href="#statistics" data-view="statistics"><span class="i" data-icon="stats"></span><span data-i18n="navStats">Stats</span></a>
-    <a href="#goals" data-view="goals"><span class="i" data-icon="target"></span><span data-i18n="navGoals">Goals</span></a>
+  <!-- ============ Dock: floating navigation on every screen size (dock.js) ============ -->
+  <nav class="dock" id="dock" aria-label="Main navigation" data-i18n-aria="mainNav" hidden>
+    <div class="dock-panel" role="toolbar">
+      <a class="dock-item" href="#dashboard" data-view="dashboard" aria-label="Dashboard" data-i18n-aria="navDashboard"><span class="dock-icon i" data-icon="dashboard"></span><span class="dock-label" role="tooltip" data-i18n="navDashboard">Dashboard</span></a>
+      <a class="dock-item" href="#habits" data-view="habits" aria-label="Habits" data-i18n-aria="navHabits"><span class="dock-icon i" data-icon="habits"></span><span class="dock-label" role="tooltip" data-i18n="navHabits">Habits</span></a>
+      <a class="dock-item" href="#calendar" data-view="calendar" aria-label="Calendar" data-i18n-aria="navCalendar"><span class="dock-icon i" data-icon="calendar"></span><span class="dock-label" role="tooltip" data-i18n="navCalendar">Calendar</span></a>
+      <button class="dock-item dock-add" type="button" data-action="add-habit" aria-label="Add habit" data-i18n-aria="addHabit"><span class="dock-icon i" data-icon="plus"></span><span class="dock-label" role="tooltip" data-i18n="addHabit">Add habit</span></button>
+      <a class="dock-item" href="#statistics" data-view="statistics" aria-label="Statistics" data-i18n-aria="navStatistics"><span class="dock-icon i" data-icon="stats"></span><span class="dock-label" role="tooltip" data-i18n="navStatistics">Statistics</span></a>
+      <a class="dock-item" href="#goals" data-view="goals" aria-label="Goals" data-i18n-aria="navGoals"><span class="dock-icon i" data-icon="target"></span><span class="dock-label" role="tooltip" data-i18n="navGoals">Goals</span></a>
+      <a class="dock-item" href="#settings" data-view="settings" aria-label="Settings" data-i18n-aria="navSettings"><span class="dock-icon i" data-icon="settings"></span><span class="dock-label" role="tooltip" data-i18n="navSettings">Settings</span></a>
+      <button class="dock-item" type="button" data-action="toggle-theme" aria-label="Toggle dark / light mode" data-i18n-aria="toggleTheme"><span class="dock-icon i theme-icon" data-icon="moon"></span><span class="dock-label theme-label" role="tooltip">Dark mode</span></button>
+    </div>
   </nav>
 
   <!-- ============ Habit modal ============ -->
@@ -691,14 +659,15 @@
   <!-- All scripts are local: the app works offline and never waits on a CDN.
        ?v= must match CACHE in sw.js; change both on every deploy so no browser mixes old and new files. -->
   <script src="config.js"></script>
-  <script src="i18n.js?v=2.5.3"></script>
+  <script src="i18n.js?v=2.5.4"></script>
   <script src="vendor/firebase-app-compat.js" defer></script>
   <script src="vendor/firebase-auth-compat.js" defer></script>
   <script src="vendor/firebase-firestore-compat.js" defer></script>
   <script src="vendor/chart.umd.min.js" defer></script>
-  <script src="shapegrid.js?v=2.5.3" defer></script>
-  <script src="clickspark.js?v=2.5.3" defer></script>
-  <script src="borderglow.js?v=2.5.3" defer></script>
-  <script src="script.js?v=2.5.3" defer></script>
+  <script src="shapegrid.js?v=2.5.4" defer></script>
+  <script src="clickspark.js?v=2.5.4" defer></script>
+  <script src="borderglow.js?v=2.5.4" defer></script>
+  <script src="dock.js?v=2.5.4" defer></script>
+  <script src="script.js?v=2.5.4" defer></script>
 </body>
 </html>

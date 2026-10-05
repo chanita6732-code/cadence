@@ -2409,6 +2409,7 @@ function adjustGoal(id, delta) {
 }
 
 /* ---------- Background grids (shapegrid.js): sign-in screen + behind every app page ---------- */
+let appDock = null;
 let authGrid = null;
 let appGrid = null;
 const gridColors = () => ({ borderColor: cssVar('--grid-line'), hoverFillColor: cssVar('--grid-hover') });
@@ -2541,7 +2542,7 @@ function showAuth() {
   const configured = Boolean(Cloud.auth);
   hideBoot();
   $('#app').hidden = true;
-  $('#bottomNav').hidden = true;
+  $('#dock').hidden = true;
   $('#auth').hidden = false;
   $('#authMain').hidden = !configured;
   $('#authReset').hidden = true;
@@ -2555,7 +2556,8 @@ function showApp() {
   hideBoot();
   $('#auth').hidden = true;
   $('#app').hidden = false;
-  $('#bottomNav').hidden = false;
+  $('#dock').hidden = false;
+  appDock?.refresh();
   route();
   renderSyncStatus();
 }
@@ -3207,6 +3209,8 @@ async function boot() {
   setLanguage(Prefs.data.lang || detectLanguage(), { save: false, render: false });
   applyTheme(Prefs.data.theme);
   initGrids();
+  // Floating navigation that magnifies under the pointer (dock.js)
+  if (typeof createDock === 'function') appDock = createDock($('.dock-panel'), { baseItemSize: 50, magnification: 70, distance: 200 });
   // Card edges glow toward the pointer (borderglow.js); colours live in style.css
   if (typeof createBorderGlow === 'function') createBorderGlow({ selector: '.card, .auth-card' });
   // Sparks on every click, in the theme's colour (clickspark.js)

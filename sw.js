@@ -6,7 +6,7 @@
    On every deploy: change the version in CACHE below AND the ?v= on the
    style/script tags in index.html (they must match).
    ========================================================= */
-const CACHE = 'cadence-v2.5.3';
+const CACHE = 'cadence-v2.5.4';
 const SHELL = [
   './',
   './index.html',
@@ -17,6 +17,7 @@ const SHELL = [
   './shapegrid.js',
   './clickspark.js',
   './borderglow.js',
+  './dock.js',
   './config.js',
   './i18n.js',
   './manifest.webmanifest',
