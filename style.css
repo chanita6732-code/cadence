@@ -813,6 +813,45 @@ button.cell:active { transform: scale(.88); }
 .confirm-icon { width: 44px; height: 44px; padding: 11px; border-radius: 50%; background: var(--danger-soft); color: var(--danger); margin-bottom: 6px; }
 .confirm-icon.neutral { background: var(--accent-soft); color: var(--accent); }
 
+/* ---------- Page transitions (route() in script.js) ----------
+   Moving between pages cross-fades the old page into the new one with a
+   short slide in the direction of travel (html[data-nav="forward"|"back"]),
+   using the browser's View Transitions. Only the page, its title and its
+   subtitle animate; everything else (background, dock, effects) stays live.
+   Tune here: --page-shift (slide distance) and the durations below. */
+@supports (view-transition-name: none) {
+  @media (prefers-reduced-motion: no-preference) {
+    :root { --page-shift: 28px; }
+    .view { view-transition-name: page; animation: none; }
+    #headerTitle { view-transition-name: page-title; }
+    #headerSubtitle { view-transition-name: page-sub; }
+    .dock { view-transition-name: dock; } /* named so it stays above the moving page */
+
+    ::view-transition-old(root), ::view-transition-old(dock) { display: none; }
+    ::view-transition-new(root), ::view-transition-new(dock) { animation: none; mix-blend-mode: normal; }
+    ::view-transition-group(dock), ::view-transition-group(page) { animation: none; }
+    ::view-transition-group(page-title), ::view-transition-group(page-sub) { animation-duration: .3s; animation-timing-function: var(--ease); }
+
+    /* Pages differ in height: keep each snapshot at its own size, pinned to the top left */
+    ::view-transition-old(page), ::view-transition-new(page),
+    ::view-transition-old(page-title), ::view-transition-new(page-title),
+    ::view-transition-old(page-sub), ::view-transition-new(page-sub) {
+      width: auto; height: auto; max-width: none; object-fit: none; object-position: top left; mix-blend-mode: normal;
+    }
+    ::view-transition-old(page) { animation: pageOut .18s ease-in both; }
+    ::view-transition-new(page) { animation: pageIn .42s var(--ease) .06s both; }
+    ::view-transition-old(page-title), ::view-transition-old(page-sub) { animation: fadeOut .14s ease both; }
+    ::view-transition-new(page-title), ::view-transition-new(page-sub) { animation: fadeIn .3s ease .08s both; }
+  }
+}
+@keyframes pageOut { to { opacity: 0; transform: translateX(calc(var(--page-shift) * -1)); } }
+@keyframes pageIn { from { opacity: 0; transform: translateX(var(--page-shift)); } }
+@keyframes fadeOut { to { opacity: 0; } }
+:root[data-nav="back"]::view-transition-old(page) { animation-name: pageOutBack; }
+:root[data-nav="back"]::view-transition-new(page) { animation-name: pageInBack; }
+@keyframes pageOutBack { to { opacity: 0; transform: translateX(var(--page-shift)); } }
+@keyframes pageInBack { from { opacity: 0; transform: translateX(calc(var(--page-shift) * -1)); } }
+
 /* ---------- Gooey nav (gooeynav.js) ----------
    Pressing a dock item or a segmented tab pulls a ring of particles into a
    pill that fuses with them, then melts back into the item's own style.

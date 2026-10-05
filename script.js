@@ -1308,15 +1308,33 @@ function greeting() {
   return t('greetEvening');
 }
 
+let lastView = null;
+
 function route() {
   if (!Store.ns) return;
   const name = location.hash.replace('#', '');
-  UI.view = VIEWS[name] ? name : 'dashboard';
-  $$('.view').forEach((v) => { v.hidden = v.dataset.view !== UI.view; });
-  $$('a[data-view]').forEach((a) => a.classList.toggle('active', a.dataset.view === UI.view));
-  renderHeader();
-  renderView();
-  window.scrollTo({ top: 0 });
+  const next = VIEWS[name] ? name : 'dashboard';
+  const swap = () => {
+    UI.view = next;
+    $$('.view').forEach((v) => { v.hidden = v.dataset.view !== UI.view; });
+    $$('a[data-view]').forEach((a) => a.classList.toggle('active', a.dataset.view === UI.view));
+    renderHeader();
+    renderView();
+    window.scrollTo({ top: 0 });
+  };
+  const from = lastView;
+  lastView = next;
+  // Moving between pages: cross-fade and slide the old page into the new one (styles: "Page transitions")
+  const animate = from && from !== next && !$('#app').hidden && !document.hidden
+    && typeof document.startViewTransition === 'function'
+    && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!animate) { swap(); return; }
+  const order = Object.keys(VIEWS);
+  const root = document.documentElement;
+  root.dataset.nav = order.indexOf(next) > order.indexOf(from) ? 'forward' : 'back';
+  const transition = document.startViewTransition(swap);
+  route.transition = transition;
+  transition.finished.catch(() => {}).then(() => { if (route.transition === transition) delete root.dataset.nav; });
 }
 
 function displayName() { return Store.profile.name || ''; }
