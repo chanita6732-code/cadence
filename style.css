@@ -44,6 +44,7 @@
   --lv0: #f07a8a; --lv1: #f0935a; --lv2: #f0b75a; --lv3: #9181ff; --lv4: #4ade80; /* achievement levels: very low → achieved */
   --grid-line: rgba(145, 129, 255, .13); --grid-hover: rgba(124, 92, 255, .30); /* sign-in background grid */
   --spark: #ffffff; /* click sparks (clickspark.js) */
+  --glow-hsl: 255deg 92% 80%; --glow-1: #a78bfa; --glow-2: #6366f1; --glow-3: #38bdf8; /* card border glow (borderglow.js) */
   --grid-line-app: rgba(145, 129, 255, .075); --grid-hover-app: rgba(124, 92, 255, .16); /* fainter behind the app pages */
   --hm-0: #1b2140;
   --hm-1: #2f2a6e;
@@ -78,6 +79,7 @@
   --lv0: #d0384f; --lv1: #c8601f; --lv2: #a86b00; --lv3: #5b45e0; --lv4: #15803d;
   --grid-line: rgba(91, 69, 224, .13); --grid-hover: rgba(91, 69, 224, .16);
   --spark: #5b45e0;
+  --glow-hsl: 252deg 78% 58%; --glow-1: #7c4dff; --glow-2: #4f46e5; --glow-3: #0ea5e9;
   --grid-line-app: rgba(91, 69, 224, .085); --grid-hover-app: rgba(91, 69, 224, .10);
   --hm-0: #ebebf6;
   --hm-1: #d9d2fd;
@@ -801,6 +803,103 @@ button.cell:active { transform: scale(.88); }
 .confirm h2 { font-size: 17px; }
 .confirm-icon { width: 44px; height: 44px; padding: 11px; border-radius: 50%; background: var(--danger-soft); color: var(--danger); margin-bottom: 6px; }
 .confirm-icon.neutral { background: var(--accent-soft); color: var(--accent); }
+
+/* ---------- Border glow (borderglow.js) ----------
+   Card edges light up toward the pointer. Adapted from React Bits' BorderGlow
+   to sit on the existing cards: same border, radius, background and shadow.
+   Tune here: --edge-sensitivity (0–100, lower = starts further from the edge),
+   --glow-padding (how far the outer glow reaches), --cone-spread (5–45),
+   --fill-opacity, and the colours --glow-hsl / --glow-1..3 in the tokens above. */
+@media (hover: hover) {
+  .glow-card {
+    --edge-proximity: 0;
+    --cursor-angle: 45deg;
+    --edge-sensitivity: 30;
+    --color-sensitivity: calc(var(--edge-sensitivity) + 20);
+    --glow-padding: 40px;
+    --cone-spread: 25;
+    --fill-opacity: .5;
+    --card-bg: var(--surface);
+    --glow-mesh:
+      radial-gradient(at 80% 55%, var(--glow-1) 0px, transparent 50%),
+      radial-gradient(at 69% 34%, var(--glow-2) 0px, transparent 50%),
+      radial-gradient(at 8% 6%, var(--glow-3) 0px, transparent 50%),
+      radial-gradient(at 41% 38%, var(--glow-1) 0px, transparent 50%),
+      radial-gradient(at 86% 85%, var(--glow-2) 0px, transparent 50%),
+      radial-gradient(at 82% 18%, var(--glow-3) 0px, transparent 50%),
+      radial-gradient(at 51% 4%, var(--glow-2) 0px, transparent 50%),
+      linear-gradient(var(--glow-1) 0 100%);
+    isolation: isolate;
+  }
+  /* Zero-specificity so cards that are sticky/relative already keep their own positioning */
+  :where(.glow-card) { position: relative; }
+  /* Content stays above the glow layers */
+  :where(.glow-card) > :where(:not(.edge-light)) { position: relative; z-index: 1; }
+
+  .glow-card::after,
+  .glow-card > .edge-light {
+    content: "";
+    position: absolute;
+    inset: -1px; /* cover the card's own 1px border */
+    border-radius: inherit;
+    pointer-events: none;
+    transition: opacity .25s ease-out;
+    z-index: 0;
+  }
+  .glow-card:not(:hover)::after,
+  .glow-card:not(:hover) > .edge-light {
+    opacity: 0;
+    transition: opacity .75s ease-in-out;
+  }
+
+  /* Coloured mesh-gradient border, visible only in a cone facing the pointer.
+     (The card's own ::before is left alone — some cards already use it.) */
+  .glow-card::after {
+    border: 1px solid transparent;
+    background:
+      linear-gradient(var(--card-bg) 0 100%) padding-box,
+      var(--glow-mesh) border-box;
+    opacity: calc((var(--edge-proximity) - var(--color-sensitivity)) / (100 - var(--color-sensitivity)));
+    -webkit-mask-image: conic-gradient(from var(--cursor-angle) at center,
+      black calc(var(--cone-spread) * 1%), transparent calc((var(--cone-spread) + 15) * 1%),
+      transparent calc((100 - var(--cone-spread) - 15) * 1%), black calc((100 - var(--cone-spread)) * 1%));
+    mask-image: conic-gradient(from var(--cursor-angle) at center,
+      black calc(var(--cone-spread) * 1%), transparent calc((var(--cone-spread) + 15) * 1%),
+      transparent calc((100 - var(--cone-spread) - 15) * 1%), black calc((100 - var(--cone-spread)) * 1%));
+  }
+
+  /* Outer glow: a soft halo just outside (and slightly inside) the edge nearest the pointer */
+  .glow-card > .edge-light {
+    inset: calc(var(--glow-padding) * -1);
+    -webkit-mask-image: conic-gradient(from var(--cursor-angle) at center, black 2.5%, transparent 10%, transparent 90%, black 97.5%);
+    mask-image: conic-gradient(from var(--cursor-angle) at center, black 2.5%, transparent 10%, transparent 90%, black 97.5%);
+    opacity: calc((var(--edge-proximity) - var(--edge-sensitivity)) / (100 - var(--edge-sensitivity)));
+    mix-blend-mode: plus-lighter;
+  }
+  .glow-card > .edge-light::before {
+    content: "";
+    position: absolute;
+    inset: var(--glow-padding);
+    border-radius: inherit;
+    box-shadow:
+      inset 0 0 0 1px hsl(var(--glow-hsl) / 100%),
+      inset 0 0 1px 0 hsl(var(--glow-hsl) / 60%),
+      inset 0 0 3px 0 hsl(var(--glow-hsl) / 50%),
+      inset 0 0 6px 0 hsl(var(--glow-hsl) / 40%),
+      inset 0 0 15px 0 hsl(var(--glow-hsl) / 30%),
+      inset 0 0 25px 2px hsl(var(--glow-hsl) / 20%),
+      inset 0 0 50px 2px hsl(var(--glow-hsl) / 10%),
+      0 0 1px 0 hsl(var(--glow-hsl) / 60%),
+      0 0 3px 0 hsl(var(--glow-hsl) / 50%),
+      0 0 6px 0 hsl(var(--glow-hsl) / 40%),
+      0 0 15px 0 hsl(var(--glow-hsl) / 30%),
+      0 0 25px 2px hsl(var(--glow-hsl) / 20%),
+      0 0 50px 2px hsl(var(--glow-hsl) / 10%);
+  }
+  /* Light surfaces: additive blending would wash out, so draw the glow normally and softer */
+  :root[data-theme="light"] .glow-card > .edge-light { mix-blend-mode: normal; }
+  :root[data-theme="light"] .glow-card > .edge-light::before { opacity: .55; }
+}
 
 /* ---------- Empty states ---------- */
 .empty {

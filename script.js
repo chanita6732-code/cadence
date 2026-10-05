@@ -3207,6 +3207,8 @@ async function boot() {
   setLanguage(Prefs.data.lang || detectLanguage(), { save: false, render: false });
   applyTheme(Prefs.data.theme);
   initGrids();
+  // Card edges glow toward the pointer (borderglow.js); colours live in style.css
+  if (typeof createBorderGlow === 'function') createBorderGlow({ selector: '.card, .auth-card' });
   // Sparks on every click, in the theme's colour (clickspark.js)
   if (typeof createClickSpark === 'function') createClickSpark({ sparkColor: () => cssVar('--spark') || '#fff', sparkSize: 10, sparkRadius: 15, sparkCount: 8, duration: 400 });
   bindEvents();
