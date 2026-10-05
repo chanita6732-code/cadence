@@ -253,6 +253,7 @@ code { font-size: .92em; padding: 1px 5px; border-radius: 5px; background: var(-
 .topbar h1 { font-size: 26px; font-weight: 700; letter-spacing: -.02em; line-height: 1.2; }
 .subtitle { color: var(--text-2); margin-top: 4px; }
 .topbar-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.theme-btn { border: 1px solid var(--border); border-radius: 50%; background: color-mix(in srgb, var(--surface) 80%, transparent); }
 .avatar-btn { border-radius: 50%; transition: transform .15s; }
 .avatar-btn:hover { transform: scale(1.05); }
 
@@ -262,7 +263,7 @@ code { font-size: .92em; padding: 1px 5px; border-radius: 5px; background: var(-
 /* ---------- Dock (dock.js): floating navigation on every screen size ----------
    Adapted from React Bits' Dock. Items grow under the pointer (dock.js sets
    their width/height); --dock-size is the resting size, also set by dock.js
-   so all eight items fit on narrow screens. */
+   so all items fit on narrow screens. */
 .dock {
   position: fixed; left: 0; right: 0; bottom: calc(12px + env(safe-area-inset-bottom)); z-index: 40;
   display: flex; justify-content: center; pointer-events: none;
