@@ -2,9 +2,11 @@
    Cadence — service worker
    Caches the app shell so Cadence opens instantly and works offline.
    Only same-origin GET requests are handled; Firebase calls always
-   go to the network. Bump CACHE when you deploy a new version.
+   go to the network.
+   On every deploy: change the version in CACHE below AND the ?v= on the
+   style/script tags in index.html (they must match).
    ========================================================= */
-const CACHE = 'cadence-v2.5.0';
+const CACHE = 'cadence-v2.5.1';
 const SHELL = [
   './',
   './index.html',
@@ -25,8 +27,14 @@ const SHELL = [
   './icons/icon-512.png',
 ];
 
+// Fetch every file fresh from the server (bypassing the browser's HTTP cache), so one
+// version's files are always stored together — never a new page with an old stylesheet.
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));
+  event.waitUntil(
+    caches.open(CACHE)
+      .then((cache) => cache.addAll(SHELL.map((url) => new Request(url, { cache: 'reload' }))))
+      .then(() => self.skipWaiting()),
+  );
 });
 
 self.addEventListener('activate', (event) => {
@@ -37,21 +45,32 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Stale-while-revalidate: answer from cache immediately, refresh the cache in the background
+const NETWORK_TIMEOUT_MS = 3000;
+
+// Network first: when online, every file comes from the server (revalidated, so it's cheap),
+// which keeps the page, styles and scripts on the same version. The cache is used when
+// offline or when the network takes too long, so the app still opens instantly-ish anywhere.
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET' || new URL(request.url).origin !== self.location.origin) return;
   event.respondWith((async () => {
     const cache = await caches.open(CACHE);
-    const key = request.mode === 'navigate' ? './index.html' : request;
-    const cached = await cache.match(key, { ignoreSearch: request.mode === 'navigate' });
-    const network = fetch(request)
+    // Files are stored without their ?v= version tag, so each one is cached once
+    const bare = new URL(request.url); bare.search = '';
+    const key = request.mode === 'navigate' ? './index.html' : bare.href;
+    const cached = await cache.match(key, { ignoreSearch: true });
+    const network = fetch(request, { cache: 'no-cache' })
       .then((res) => {
         if (res.ok && res.type === 'basic') cache.put(key, res.clone());
         return res;
       })
       .catch(() => null);
-    if (cached) { event.waitUntil(network); return cached; }
-    return (await network) || new Response('Offline', { status: 503, statusText: 'Offline' });
+    if (!cached) return (await network) || new Response('Offline', { status: 503, statusText: 'Offline' });
+    // Wait briefly for the network; fall back to the cached copy if it's slow or unreachable
+    const timeout = new Promise((resolve) => setTimeout(() => resolve(null), NETWORK_TIMEOUT_MS));
+    const fresh = await Promise.race([network, timeout]);
+    if (fresh && fresh.ok) return fresh;
+    event.waitUntil(network);
+    return cached;
   })());
 });

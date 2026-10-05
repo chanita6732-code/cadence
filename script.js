@@ -3195,7 +3195,10 @@ function setLanguage(lang, { save = true, render = true } = {}) {
 
 function registerServiceWorker() {
   if (!('serviceWorker' in navigator) || !/^https?:$/.test(location.protocol)) return;
-  navigator.serviceWorker.register('sw.js').catch((err) => console.warn('Service worker not registered', err));
+  navigator.serviceWorker.register('sw.js')
+    // Ask for a newer version on every visit (one small request), so updates arrive promptly
+    .then((reg) => reg.update())
+    .catch((err) => console.warn('Service worker not registered', err));
 }
 
 async function boot() {

@@ -22,7 +22,7 @@
   </script>
   <link rel="stylesheet" href="vendor/inter-font.css" />
   <link rel="stylesheet" href="vendor/noto-sans-thai-font.css" />
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=2.5.1" />
 </head>
 <body>
   <!-- Shared SVG gradient used by progress rings -->
@@ -48,7 +48,7 @@
   <!-- ============ Sign in / sign up ============ -->
   <div class="auth" id="auth" hidden>
     <!-- Decorative animated hexagon grid (shapegrid.js); sign-in screen only -->
-    <canvas class="shapegrid-canvas auth-grid" id="authGrid" aria-hidden="true"></canvas>
+    <canvas class="shapegrid-canvas auth-grid" id="authGrid" aria-hidden="true" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none"></canvas>
     <div class="auth-card">
       <div class="auth-brand">
         <span class="brand-mark" aria-hidden="true"></span><span>Cadence</span>
@@ -121,7 +121,7 @@
 
   <div class="app" id="app" hidden>
     <!-- Decorative hexagon grid behind every app page (shapegrid.js) -->
-    <canvas class="shapegrid-canvas app-grid" id="appGrid" aria-hidden="true"></canvas>
+    <canvas class="shapegrid-canvas app-grid" id="appGrid" aria-hidden="true" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none"></canvas>
     <!-- ============ Sidebar (desktop / tablet) ============ -->
     <aside class="sidebar" aria-label="Main navigation" data-i18n-aria="mainNav">
       <a class="brand" href="#dashboard">
@@ -688,14 +688,15 @@
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <!-- All scripts are local: the app works offline and never waits on a CDN -->
+  <!-- All scripts are local: the app works offline and never waits on a CDN.
+       ?v= must match CACHE in sw.js; change both on every deploy so no browser mixes old and new files. -->
   <script src="config.js"></script>
-  <script src="i18n.js"></script>
+  <script src="i18n.js?v=2.5.1"></script>
   <script src="vendor/firebase-app-compat.js" defer></script>
   <script src="vendor/firebase-auth-compat.js" defer></script>
   <script src="vendor/firebase-firestore-compat.js" defer></script>
   <script src="vendor/chart.umd.min.js" defer></script>
-  <script src="shapegrid.js" defer></script>
-  <script src="script.js" defer></script>
+  <script src="shapegrid.js?v=2.5.1" defer></script>
+  <script src="script.js?v=2.5.1" defer></script>
 </body>
 </html>
