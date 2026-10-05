@@ -2408,13 +2408,19 @@ function adjustGoal(id, delta) {
   if (after && !before && Stats.goalProgress(after).completed) toast(t('goalReached', { name: g.title }), 'award');
 }
 
-/* ---------- Sign-in background grid (shapegrid.js) ---------- */
+/* ---------- Background grids (shapegrid.js): sign-in screen + behind every app page ---------- */
 let authGrid = null;
+let appGrid = null;
 const gridColors = () => ({ borderColor: cssVar('--grid-line'), hoverFillColor: cssVar('--grid-hover') });
-function initAuthGrid() {
+const appGridColors = () => ({ borderColor: cssVar('--grid-line-app'), hoverFillColor: cssVar('--grid-hover-app') });
+function initGrids() {
   if (authGrid || typeof createShapeGrid !== 'function') return;
-  // Pointer is tracked on the whole sign-in screen so the card on top doesn't block the highlight
-  authGrid = createShapeGrid($('#authGrid'), { shape: 'hexagon', squareSize: 23, direction: 'diagonal', speed: 0.5, hoverTrailAmount: 5, eventTarget: $('#auth'), ...gridColors() });
+  const base = { shape: 'hexagon', squareSize: 23, direction: 'diagonal', speed: 0.5, hoverTrailAmount: 5 };
+  // Touch devices have no hover and stay open longer, so cap the frame rate there to save battery
+  const fps = matchMedia('(hover: none)').matches ? 30 : 0;
+  // The pointer is tracked on the whole screen so content on top doesn't block the highlight
+  authGrid = createShapeGrid($('#authGrid'), { ...base, eventTarget: $('#auth'), ...gridColors() });
+  appGrid = createShapeGrid($('#appGrid'), { ...base, fps, eventTarget: $('#app'), ...appGridColors() });
 }
 
 /* ---------- Theme (per device) ---------- */
@@ -2425,6 +2431,7 @@ function applyTheme(theme) {
   $$('.theme-icon').forEach((el) => { el.innerHTML = icon(dark ? 'moon' : 'sun'); });
   $('meta[name="theme-color"]').setAttribute('content', dark ? '#0a0e1f' : '#f4f4fb');
   authGrid?.update(gridColors());
+  appGrid?.update(appGridColors());
 }
 
 function setTheme(theme) {
@@ -3196,7 +3203,7 @@ async function boot() {
   Prefs.load();
   setLanguage(Prefs.data.lang || detectLanguage(), { save: false, render: false });
   applyTheme(Prefs.data.theme);
-  initAuthGrid();
+  initGrids();
   bindEvents();
   Cloud.init();
 

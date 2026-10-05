@@ -13,6 +13,7 @@
        hoverFillColor: '#222',
        hoverTrailAmount: 5,     // fading trail behind the pointer (0 = none)
        eventTarget: element,    // where to listen for the pointer (default: the canvas)
+       fps: 30,                 // optional frame-rate cap (saves battery); speed stays the same
      });
      grid.update({ borderColor, hoverFillColor });   // e.g. after a theme change
      grid.destroy();
@@ -26,7 +27,7 @@
 function createShapeGrid(canvas, options = {}) {
   const opts = {
     direction: 'right', speed: 1, borderColor: '#999', squareSize: 40,
-    hoverFillColor: '#222', shape: 'square', hoverTrailAmount: 0, eventTarget: canvas,
+    hoverFillColor: '#222', shape: 'square', hoverTrailAmount: 0, eventTarget: canvas, fps: 0,
     ...options,
   };
   const ctx = canvas.getContext('2d');
@@ -35,6 +36,7 @@ function createShapeGrid(canvas, options = {}) {
   let hovered = null;
   let trail = [];
   let frame = null;
+  let lastTime = 0;
   let width = 0;
   let height = 0;
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -158,9 +160,13 @@ function createShapeGrid(canvas, options = {}) {
     });
   }
 
-  function tick() {
+  function tick(now) {
+    // Optional frame-rate cap; movement is scaled by elapsed time so the drift speed doesn't change
+    if (opts.fps && lastTime && now - lastTime < 1000 / opts.fps - 1) { frame = requestAnimationFrame(tick); return; }
+    const elapsed = lastTime ? Math.min((now - lastTime) / (1000 / 60), 4) : 1;
+    lastTime = now;
     if (!reduceMotion.matches) {
-      const sp = Math.max(opts.speed, 0.1);
+      const sp = Math.max(opts.speed, 0.1) * elapsed;
       const wrapX = isHex() ? hexHoriz() * 2 : size();
       const wrapY = isHex() ? hexVert() : isTri() ? size() * 2 : size();
       const dir = opts.direction;
@@ -208,7 +214,7 @@ function createShapeGrid(canvas, options = {}) {
   /* ---------- run only while visible ---------- */
   let onScreen = false;
   const start = () => { if (onScreen && !document.hidden && !frame) frame = requestAnimationFrame(tick); };
-  const stop = () => { if (frame) { cancelAnimationFrame(frame); frame = null; } };
+  const stop = () => { if (frame) { cancelAnimationFrame(frame); frame = null; } lastTime = 0; };
   const io = new IntersectionObserver(([entry]) => {
     onScreen = entry.isIntersecting;
     if (onScreen) { resize(); start(); } else stop();
