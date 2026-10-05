@@ -3215,6 +3215,8 @@ async function boot() {
   if (typeof createBorderGlow === 'function') createBorderGlow({ selector: '.card, .auth-card' });
   // Sparks on every click, in the theme's colour (clickspark.js)
   if (typeof createClickSpark === 'function') createClickSpark({ sparkColor: () => cssVar('--spark') || '#fff', sparkSize: 10, sparkRadius: 15, sparkCount: 8, duration: 400 });
+  // Gooey particle burst on the dock and segmented tabs (gooeynav.js); colours live in style.css
+  if (typeof createGooeyNav === 'function') createGooeyNav({ selector: '.dock-item, .segmented button', particleCount: 15, particleDistances: [90, 10], particleR: 100, animationTime: 600, timeVariance: 300, colors: [1, 2, 3, 1, 2, 3, 1, 4] });
   bindEvents();
   Cloud.init();
 
