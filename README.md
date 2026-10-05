@@ -82,8 +82,8 @@ python3 -m http.server 8080   # แล้วเปิด http://localhost:8080
 
 ทุกครั้งที่ deploy เวอร์ชันใหม่ ให้เปลี่ยนเลขเวอร์ชัน **2 ที่ให้ตรงกัน**:
 
-1. `CACHE` ใน `sw.js` เช่น `cadence-v2.5.2`
-2. `?v=` ท้ายชื่อไฟล์ใน `index.html` (4 จุด: `style.css`, `i18n.js`, `shapegrid.js`, `script.js`) เช่น `?v=2.5.2`
+1. `CACHE` ใน `sw.js` เช่น `cadence-v2.5.3`
+2. `?v=` ท้ายชื่อไฟล์ใน `index.html` (5 จุด: `style.css`, `i18n.js`, `shapegrid.js`, `clickspark.js`, `script.js`) เช่น `?v=2.5.3`
 
 เลขนี้ทำให้เบราว์เซอร์โหลดไฟล์ชุดใหม่ทั้งชุดพร้อมกัน ไม่เอาหน้าเว็บใหม่ไปใช้กับไฟล์ CSS หรือ JavaScript ตัวเก่าที่เก็บไว้ ซึ่งจะทำให้หน้าเพี้ยน
 
@@ -185,6 +185,7 @@ i18n.js                 ข้อความภาษาอังกฤษ / �
 firestore.rules         กฎความปลอดภัยของฐานข้อมูล
 firebase.json           สำหรับ Firebase Hosting / Emulator (ไม่บังคับ)
 shapegrid.js            พื้นหลังลายหกเหลี่ยมเคลื่อนไหวของหน้าเข้าสู่ระบบ (แปลงจาก ShapeGrid ของ React Bits)
+clickspark.js           ประกายเล็ก ๆ ตรงจุดที่คลิก (แปลงจาก ClickSpark ของ React Bits)
 sw.js                   Service Worker (ใช้งานออฟไลน์)
 manifest.webmanifest    ข้อมูลสำหรับติดตั้งเป็นแอป
 icons/                  ไอคอนแอป

@@ -3207,6 +3207,8 @@ async function boot() {
   setLanguage(Prefs.data.lang || detectLanguage(), { save: false, render: false });
   applyTheme(Prefs.data.theme);
   initGrids();
+  // Sparks on every click, in the theme's colour (clickspark.js)
+  if (typeof createClickSpark === 'function') createClickSpark({ sparkColor: () => cssVar('--spark') || '#fff', sparkSize: 10, sparkRadius: 15, sparkCount: 8, duration: 400 });
   bindEvents();
   Cloud.init();
 

@@ -43,6 +43,7 @@
   --shadow-lg: 0 30px 70px rgba(2, 4, 16, .6);
   --lv0: #f07a8a; --lv1: #f0935a; --lv2: #f0b75a; --lv3: #9181ff; --lv4: #4ade80; /* achievement levels: very low → achieved */
   --grid-line: rgba(145, 129, 255, .13); --grid-hover: rgba(124, 92, 255, .30); /* sign-in background grid */
+  --spark: #ffffff; /* click sparks (clickspark.js) */
   --grid-line-app: rgba(145, 129, 255, .075); --grid-hover-app: rgba(124, 92, 255, .16); /* fainter behind the app pages */
   --hm-0: #1b2140;
   --hm-1: #2f2a6e;
@@ -76,6 +77,7 @@
   --shadow-lg: 0 30px 70px rgba(21, 25, 54, .2);
   --lv0: #d0384f; --lv1: #c8601f; --lv2: #a86b00; --lv3: #5b45e0; --lv4: #15803d;
   --grid-line: rgba(91, 69, 224, .13); --grid-hover: rgba(91, 69, 224, .16);
+  --spark: #5b45e0;
   --grid-line-app: rgba(91, 69, 224, .085); --grid-hover-app: rgba(91, 69, 224, .10);
   --hm-0: #ebebf6;
   --hm-1: #d9d2fd;
