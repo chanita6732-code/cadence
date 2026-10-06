@@ -6,7 +6,7 @@
    On every deploy: change the version in CACHE below AND the ?v= on the
    style/script tags in index.html (they must match).
    ========================================================= */
-const CACHE = 'routa-v2.6.1';
+const CACHE = 'routa-v2.6.2';
 const SHELL = [
   './',
   './index.html',

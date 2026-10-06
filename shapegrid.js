@@ -20,10 +20,9 @@
    `host` is a positioned element with overflow hidden; the grid fills it.
 
    Differences from the original: the outlines are drawn ONCE onto a canvas
-   slightly larger than the host, and the drift is a CSS transform animation
-   that the browser runs on the graphics card. The original re-draws every
-   line 60 times a second, which makes the whole page stutter on slower
-   devices. JavaScript now only runs while the pointer highlight is changing.
+   slightly larger than the host, and each frame only slides that finished
+   picture with a transform. The original re-draws every line 60 times a
+   second, which makes the whole page stutter on slower devices.
    Also: sharp on high-density screens, no drift for people who prefer
    reduced motion, and the pointer can be tracked on a parent element so
    content on top doesn't block it.
@@ -50,7 +49,6 @@ function createShapeGrid(host, options = {}) {
   let trail = [];
   let pointer = null;   // last pointer position (viewport px) while it is over the event target
   let frame = null;
-  let drift = null;     // the running transform animation
   let travel = { x: 0, y: 0 };
   let path = null;      // { from, to, duration } of the drift
   let hostBox = { left: 0, top: 0 };
@@ -144,12 +142,10 @@ function createShapeGrid(host, options = {}) {
   }
 
   function startDrift() {
-    drift?.cancel();
-    drift = null;
     last = null;
-    canvas.style.transform = 'none';
     path = null;
-    if (reduceMotion.matches || !canvas.animate || (!travel.x && !travel.y)) return;
+    canvas.style.transform = 'none';
+    if (reduceMotion.matches || (!travel.x && !travel.y)) return;
     const dir = opts.direction;
     // Same directions as the original: 'right' and 'diagonal' slide the pattern left, 'down' slides it up
     const sx = dir === 'left' ? 1 : -1;
@@ -158,23 +154,15 @@ function createShapeGrid(host, options = {}) {
     const from = { x: sx > 0 ? -travel.x : 0, y: sy > 0 ? -travel.y : 0 };
     const to = { x: sx > 0 ? 0 : -travel.x, y: sy > 0 ? 0 : -travel.y };
     const pxPerSecond = Math.max(opts.speed, 0.1) * 60;
-    const duration = (Math.max(travel.x, travel.y) / pxPerSecond) * 1000;
-    drift = canvas.animate(
-      [{ transform: `translate(${from.x}px, ${from.y}px)` }, { transform: `translate(${to.x}px, ${to.y}px)` }],
-      { duration, iterations: Infinity, easing: 'linear' },
-    );
-    path = { from, to, duration };
+    path = { from, to, duration: (Math.max(travel.x, travel.y) / pxPerSecond) * 1000 };
+    wake();
   }
 
-  /** Where the canvas is right now (viewport px), worked out from the animation clock: no layout needed. */
-  function canvasPosition() {
-    let x = 0, y = 0;
-    if (drift && path) {
-      const p = mod(Number(drift.currentTime) || 0, path.duration) / path.duration;
-      x = path.from.x + (path.to.x - path.from.x) * p;
-      y = path.from.y + (path.to.y - path.from.y) * p;
-    }
-    return { left: hostBox.left + x, top: hostBox.top + y };
+  /** How far the canvas has slid at time `now` (ms). The pattern repeats, so only the phase matters. */
+  function driftOffset(now) {
+    if (!path) return { x: 0, y: 0 };
+    const p = mod(now, path.duration) / path.duration;
+    return { x: path.from.x + (path.to.x - path.from.x) * p, y: path.from.y + (path.to.y - path.from.y) * p };
   }
 
   /* ---------- drawing ---------- */
@@ -211,7 +199,7 @@ function createShapeGrid(host, options = {}) {
 
   function resize() {
     const w = host.clientWidth, h = host.clientHeight;
-    if (!w || !h) return;
+    if (!w || !h) { width = 0; height = 0; return; } // hidden: the loop stops until it is shown again
     width = w;
     height = h;
     hostBox = host.getBoundingClientRect();
@@ -280,21 +268,28 @@ function createShapeGrid(host, options = {}) {
     return changed;
   }
 
-  function tick() {
+  /* One loop does everything that moves. Each frame it only shifts the finished picture
+     (a transform, no re-drawing); the canvas is re-painted only when a highlight changes.
+     It is driven from here rather than by a CSS/Web animation because those can freeze
+     on iPad and iPhone after the page has been in the background. */
+  function tick(now) {
     frame = null;
     if (!width || document.hidden) return;
-    const rect = canvasPosition();
+    const off = driftOffset(now);
+    if (path) canvas.style.transform = `translate3d(${off.x.toFixed(2)}px, ${off.y.toFixed(2)}px, 0)`;
+    const rect = { left: hostBox.left + off.x, top: hostBox.top + off.y };
     followLoop(rect);
     if (pointer) {
       const cell = cellAt(pointer.x - rect.left, pointer.y - rect.top);
       if (!hovered || hovered.x !== cell.x || hovered.y !== cell.y) { pushTrail(); hovered = cell; }
     }
     if (fadeCells()) paint();
-    // Keep going while the pointer is over the page (the grid drifts under it) or a highlight is fading
-    if (pointer || cellOpacities.size) frame = requestAnimationFrame(tick);
+    if (path || pointer || cellOpacities.size) frame = requestAnimationFrame(tick);
     else last = null;
   }
-  const wake = () => { if (!frame) frame = requestAnimationFrame(tick); };
+  function wake() { if (!frame && width && !document.hidden) frame = requestAnimationFrame(tick); }
+  // Coming back from the background, another tab or a locked screen: pick the loop up again
+  const onResume = () => { last = null; wake(); };
 
   // Mouse only: a finger has no hover, and its last position would leave a highlight stuck on screen
   function onMove(e) { if (e.pointerType !== 'mouse') return; pointer = { x: e.clientX, y: e.clientY }; wake(); }
@@ -308,6 +303,9 @@ function createShapeGrid(host, options = {}) {
   const onMotionChange = () => startDrift();
 
   ro.observe(host);
+  document.addEventListener('visibilitychange', onResume);
+  window.addEventListener('pageshow', onResume);
+  window.addEventListener('focus', onResume);
   reduceMotion.addEventListener?.('change', onMotionChange);
   opts.eventTarget.addEventListener('pointermove', onMove);
   opts.eventTarget.addEventListener('pointerleave', onLeave);
@@ -324,8 +322,10 @@ function createShapeGrid(host, options = {}) {
     },
     destroy() {
       if (frame) cancelAnimationFrame(frame);
-      drift?.cancel();
       ro.disconnect();
+      document.removeEventListener('visibilitychange', onResume);
+      window.removeEventListener('pageshow', onResume);
+      window.removeEventListener('focus', onResume);
       reduceMotion.removeEventListener?.('change', onMotionChange);
       opts.eventTarget.removeEventListener('pointermove', onMove);
       opts.eventTarget.removeEventListener('pointerleave', onLeave);
