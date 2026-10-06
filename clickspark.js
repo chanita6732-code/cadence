@@ -45,10 +45,18 @@ function createClickSpark(options = {}) {
   let width = 0;
   let height = 0;
 
+  let box = { left: 0, top: 0 }; // where the canvas really sits on screen
+
+  /** Match the drawing surface to the canvas as it is on screen right now. */
   function resize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    width = window.innerWidth;
-    height = window.innerHeight;
+    const rect = canvas.getBoundingClientRect();
+    // Hidden (not in the top layer yet): fall back to the window size
+    const w = rect.width || window.innerWidth, h = rect.height || window.innerHeight;
+    box = { left: rect.width ? rect.left : 0, top: rect.height ? rect.top : 0 };
+    if (w === width && h === height && canvas.width === Math.round(w * dpr)) return;
+    width = w;
+    height = h;
     canvas.width = Math.round(width * dpr);
     canvas.height = Math.round(height * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -101,16 +109,24 @@ function createClickSpark(options = {}) {
     if (reduceMotion.matches || (e.clientX === 0 && e.clientY === 0)) return;
     const color = typeof opts.sparkColor === 'function' ? opts.sparkColor() : opts.sparkColor;
     const start = performance.now();
-    for (let i = 0; i < opts.sparkCount; i++) {
-      sparks.push({ x: e.clientX, y: e.clientY, angle: (2 * Math.PI * i) / opts.sparkCount, start, color });
-    }
     raise();
+    // Re-measure on every click. After the app comes back from the background, or the screen
+    // rotates while it is away, phones and tablets often skip the "resize" event; drawing with
+    // the old size would put the sparks beside the finger instead of under it.
+    resize();
+    const x = e.clientX - box.left, y = e.clientY - box.top;
+    for (let i = 0; i < opts.sparkCount; i++) {
+      sparks.push({ x, y, angle: (2 * Math.PI * i) / opts.sparkCount, start, color });
+    }
     if (!frame) frame = requestAnimationFrame(draw);
   }
 
   // Capture phase: runs even when a handler stops the event or re-renders the clicked element
   document.addEventListener('click', onClick, true);
   window.addEventListener('resize', resize);
+  window.addEventListener('orientationchange', resize);
+  window.addEventListener('pageshow', resize);
+  window.visualViewport?.addEventListener('resize', resize);
   resize();
 
   return {
@@ -119,6 +135,9 @@ function createClickSpark(options = {}) {
       if (frame) cancelAnimationFrame(frame);
       document.removeEventListener('click', onClick, true);
       window.removeEventListener('resize', resize);
+      window.removeEventListener('orientationchange', resize);
+      window.removeEventListener('pageshow', resize);
+      window.visualViewport?.removeEventListener('resize', resize);
       canvas.remove();
     },
   };
