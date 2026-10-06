@@ -82,8 +82,8 @@ python3 -m http.server 8080   # แล้วเปิด http://localhost:8080
 
 ทุกครั้งที่ deploy เวอร์ชันใหม่ ให้เปลี่ยนเลขเวอร์ชัน **2 ที่ให้ตรงกัน**:
 
-1. `CACHE` ใน `sw.js` เช่น `routa-v2.6.1`
-2. `?v=` ท้ายชื่อไฟล์ใน `index.html` (8 จุด: `style.css`, `i18n.js`, `shapegrid.js`, `clickspark.js`, `borderglow.js`, `dock.js`, `gooeynav.js`, `script.js`) เช่น `?v=2.6.1`
+1. `CACHE` ใน `sw.js` เช่น `routa-v2.6.2`
+2. `?v=` ท้ายชื่อไฟล์ใน `index.html` (8 จุด: `style.css`, `i18n.js`, `shapegrid.js`, `clickspark.js`, `borderglow.js`, `dock.js`, `gooeynav.js`, `script.js`) เช่น `?v=2.6.2`
 
 เลขนี้ทำให้เบราว์เซอร์โหลดไฟล์ชุดใหม่ทั้งชุดพร้อมกัน ไม่เอาหน้าเว็บใหม่ไปใช้กับไฟล์ CSS หรือ JavaScript ตัวเก่าที่เก็บไว้ ซึ่งจะทำให้หน้าเพี้ยน
 

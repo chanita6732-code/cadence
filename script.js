@@ -129,6 +129,9 @@ const ICONS = {
   alert: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4M12 17h.01"/>',
   info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>',
   download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>',
+  copy: '<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>',
+  share: '<path d="M12 15V3M8 7l4-4 4 4M6 11H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1"/>',
+  dots: '<circle cx="12" cy="5" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="12" cy="19" r="1.4"/>',
   upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>',
   refresh: '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
   award: '<circle cx="12" cy="8" r="6"/><path d="M15.48 12.89 17 22l-5-3-5 3 1.52-9.11"/>',
@@ -414,7 +417,7 @@ const LocalDB = {
 };
 
 const Prefs = {
-  data: { theme: 'dark', lang: null, mode: null, lastUser: null, v1Handled: false },
+  data: { theme: 'dark', lang: null, mode: null, lastUser: null, v1Handled: false, installHint: false },
   load() {
     const r = LocalDB.read(PREFS_KEY);
     const v = r.status === 'ok' && r.value && typeof r.value === 'object' ? r.value : {};
@@ -424,6 +427,7 @@ const Prefs = {
       mode: v.mode === 'guest' || v.mode === 'cloud' ? v.mode : null,
       lastUser: v.lastUser && typeof v.lastUser.id === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(v.lastUser.id) ? { id: v.lastUser.id, email: str(v.lastUser.email, 320) } : null,
       v1Handled: v.v1Handled === true,
+      installHint: v.installHint === true,
     };
   },
   set(patch) { Object.assign(this.data, patch); LocalDB.write(PREFS_KEY, this.data); },
@@ -2590,6 +2594,7 @@ function showApp() {
   appDock?.refresh();
   route();
   renderSyncStatus();
+  maybeInstallHint();
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -2998,6 +3003,8 @@ const actions = {
   'use-guest': () => enterGuest(),
   'google-sign-in': (el) => signInWithGoogle(el),
   'toggle-lang': () => setLanguage(Lang.current === 'th' ? 'en' : 'th'),
+  install: () => installApp(),
+  'copy-link': () => copyLink(),
   'show-reset': () => { $('#authMain').hidden = true; $('#authReset').hidden = false; $('#resetEmail').value = $('#authEmail').value; setMsg('#resetMsg', ''); },
   'show-signin': () => { $('#authReset').hidden = true; $('#authMain').hidden = false; },
   'toggle-password': (el) => {
@@ -3195,6 +3202,74 @@ function detectLanguage() {
 }
 
 /** Fill every [data-i18n*] element in the static HTML. */
+/* ---------- Install as an app ----------
+   Chrome/Edge (Android, desktop) let the page trigger the install itself.
+   Safari on iPhone/iPad and some other browsers never offer that, so there
+   we show the few taps it takes instead. */
+const Install = {
+  prompt: null, // the browser's saved "install" offer, when it gives one
+  get installed() { return matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; },
+  /** Which instructions fit this browser. */
+  get kind() {
+    const ua = navigator.userAgent || '';
+    const ios = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    // Browsers built into other apps (Facebook, Instagram, LINE…) can't add to the home screen
+    if (/FBAN|FBAV|FB_IAB|Instagram|Line\/|MicroMessenger|TikTok|musical_ly|Twitter|; wv\)/i.test(ua)) return ios ? 'inappIos' : 'inappAndroid';
+    if (ios) return 'ios';
+    if (/Android/i.test(ua)) return 'android';
+    return /^((?!chrome|android|crios|fxios|edg).)*safari/i.test(ua) ? 'macSafari' : 'desktop';
+  },
+};
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); Install.prompt = e; renderInstall(); });
+window.addEventListener('appinstalled', () => { Install.prompt = null; renderInstall(); toast(t('installDone')); });
+
+function renderInstall() {
+  const done = Install.installed;
+  $$('[data-install-hide]').forEach((el) => { el.hidden = done; });
+  const lead = $('#installLead');
+  if (lead) lead.textContent = t(done ? 'installLeadDone' : 'installLead');
+}
+
+const INSTALL_STEPS = {
+  ios: ['installIos1', 'installIos2', 'installIos3'],
+  android: ['installAndroid1', 'installAndroid2', 'installAndroid3'],
+  macSafari: ['installMac1', 'installMac2'],
+  desktop: ['installDesktop1', 'installDesktop2'],
+  inappIos: ['installInapp1', 'installInappIos2', 'installInapp3'],
+  inappAndroid: ['installInapp1', 'installInappAndroid2', 'installInapp3'],
+};
+
+async function installApp() {
+  if (Install.installed) { toast(t('installLeadDone')); return; }
+  if (Install.prompt) {
+    const offer = Install.prompt;
+    Install.prompt = null; // an offer can only be used once
+    offer.prompt();
+    try { await offer.userChoice; } catch { /* dismissed */ }
+    return;
+  }
+  const kind = Install.kind;
+  const inApp = kind.startsWith('inapp');
+  $('#installIntro').textContent = t(inApp ? 'installIntroInapp' : 'installIntro');
+  // Trusted strings from i18n.js; {share} / {menu} become small pictures of the button to look for
+  $('#installSteps').innerHTML = INSTALL_STEPS[kind]
+    .map((key) => `<li><span>${t(key).replace('{share}', iconSpan('share')).replace('{menu}', iconSpan('dots'))}</span></li>`).join('');
+  $('#installCopy').hidden = !inApp;
+  $('#installModal').showModal();
+}
+
+async function copyLink() {
+  const url = location.origin + location.pathname;
+  try { await navigator.clipboard.writeText(url); toast(t('linkCopied')); } catch { toast(url, 'alert'); }
+}
+
+/** One gentle nudge on phones and tablets, the first time the app opens in a browser tab. */
+function maybeInstallHint() {
+  if (Prefs.data.installHint || Install.installed || !matchMedia('(hover: none)').matches) return;
+  Prefs.set({ installHint: true });
+  setTimeout(() => { if (!Install.installed && !$('#app').hidden) toast(t('installHint'), 'download', { label: t('installShort'), onClick: installApp }); }, 2500);
+}
+
 function applyStaticText() {
   $$('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
   $$('[data-i18n-html]').forEach((el) => { el.innerHTML = t(el.dataset.i18nHtml); }); // trusted strings from i18n.js only
@@ -3215,6 +3290,7 @@ function setLanguage(lang, { save = true, render = true } = {}) {
     b.classList.toggle('active', on);
     b.setAttribute('aria-pressed', String(on));
   });
+  renderInstall();
   if (!render) return;
   applyTheme(Prefs.data.theme); // theme labels
   if (!$('#auth').hidden) setAuthTab(Auth.tab);

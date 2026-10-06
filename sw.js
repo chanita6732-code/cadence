@@ -6,7 +6,7 @@
    On every deploy: change the version in CACHE below AND the ?v= on the
    style/script tags in index.html (they must match).
    ========================================================= */
-const CACHE = 'routa-v2.6.0';
+const CACHE = 'routa-v2.6.1';
 const SHELL = [
   './',
   './index.html',
@@ -30,6 +30,7 @@ const SHELL = [
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-maskable-512.png',
+  './icons/icon-apple-180.png',
 ];
 
 // Fetch every file fresh from the server (bypassing the browser's HTTP cache), so one

@@ -2,6 +2,7 @@
   "name": "Routa — Habit Tracker",
   "short_name": "Routa",
   "description": "Track daily habits, streaks and goals. Syncs across your devices.",
+  "id": "./",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

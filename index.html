@@ -8,8 +8,12 @@
   <title>Routa — Habit Tracker</title>
 
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="icon" href="icons/icon.svg?v=2.6.0" type="image/svg+xml" />
-  <link rel="apple-touch-icon" href="icons/icon-192.png?v=2.6.0" />
+  <link rel="icon" href="icons/icon.svg?v=2.6.1" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icons/icon-apple-180.png?v=2.6.1" />
+  <!-- Opens full screen, without browser bars, when added to a phone's home screen -->
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Routa" />
 
   <!-- Apply the saved theme and language before first paint to avoid a flash -->
   <script>
@@ -22,7 +26,7 @@
   </script>
   <link rel="stylesheet" href="vendor/inter-font.css" />
   <link rel="stylesheet" href="vendor/noto-sans-thai-font.css" />
-  <link rel="stylesheet" href="style.css?v=2.6.0" />
+  <link rel="stylesheet" href="style.css?v=2.6.1" />
 </head>
 <body>
   <!-- Shared SVG gradient used by progress rings -->
@@ -116,6 +120,7 @@
       <div class="auth-divider" id="authDivider"><span data-i18n="or">or</span></div>
       <button class="btn btn-ghost btn-block" type="button" data-action="use-guest" data-i18n="continueGuest">Continue without an account</button>
       <p class="hint center" data-i18n="guestHint">Your data stays on this device. You can sign in later and bring it with you.</p>
+      <button class="link-btn install-link" type="button" data-action="install" data-install-hide><span class="i" data-icon="download"></span><span data-i18n="installApp">Install the app</span></button>
     </div>
   </div>
 
@@ -416,6 +421,14 @@
             </form>
           </article>
 
+          <article class="card" id="installCard">
+            <div class="card-head"><h2 data-i18n="installTitle">Install the app</h2></div>
+            <p class="muted" id="installLead"></p>
+            <div class="data-actions" data-install-hide>
+              <button class="btn btn-primary" type="button" data-action="install"><span class="i" data-icon="download"></span><span data-i18n="installApp">Install the app</span></button>
+            </div>
+          </article>
+
           <article class="card">
             <div class="card-head"><h2 data-i18n="yourData">Your data</h2></div>
             <p class="muted" id="dataLead"></p>
@@ -654,21 +667,38 @@
     </div>
   </dialog>
 
+  <!-- ============ How to install (shown when the browser can't install with one tap) ============ -->
+  <dialog class="modal modal-sm" id="installModal" aria-labelledby="installModalTitle">
+    <div class="modal-head">
+      <h2 id="installModalTitle" data-i18n="installTitle">Install the app</h2>
+      <button class="icon-btn" type="button" data-close aria-label="Close" data-i18n-aria="close"><span class="i" data-icon="x"></span></button>
+    </div>
+    <div class="modal-body">
+      <p class="muted" id="installIntro"></p>
+      <ol class="install-steps" id="installSteps"></ol>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" type="button" id="installCopy" data-action="copy-link" hidden><span class="i" data-icon="copy"></span><span data-i18n="copyLink">Copy link</span></button>
+      <span class="spacer"></span>
+      <button class="btn btn-primary" type="button" data-close data-i18n="gotIt">Got it</button>
+    </div>
+  </dialog>
+
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
   <!-- All scripts are local: the app works offline and never waits on a CDN.
        ?v= must match CACHE in sw.js; change both on every deploy so no browser mixes old and new files. -->
   <script src="config.js"></script>
-  <script src="i18n.js?v=2.6.0"></script>
+  <script src="i18n.js?v=2.6.1"></script>
   <script src="vendor/firebase-app-compat.js" defer></script>
   <script src="vendor/firebase-auth-compat.js" defer></script>
   <script src="vendor/firebase-firestore-compat.js" defer></script>
   <script src="vendor/chart.umd.min.js" defer></script>
-  <script src="shapegrid.js?v=2.6.0" defer></script>
-  <script src="clickspark.js?v=2.6.0" defer></script>
-  <script src="borderglow.js?v=2.6.0" defer></script>
-  <script src="dock.js?v=2.6.0" defer></script>
-  <script src="gooeynav.js?v=2.6.0" defer></script>
-  <script src="script.js?v=2.6.0" defer></script>
+  <script src="shapegrid.js?v=2.6.1" defer></script>
+  <script src="clickspark.js?v=2.6.1" defer></script>
+  <script src="borderglow.js?v=2.6.1" defer></script>
+  <script src="dock.js?v=2.6.1" defer></script>
+  <script src="gooeynav.js?v=2.6.1" defer></script>
+  <script src="script.js?v=2.6.1" defer></script>
 </body>
 </html>
