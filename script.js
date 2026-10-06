@@ -1313,6 +1313,73 @@ function greeting() {
   return t('greetEvening');
 }
 
+/* ---------- Motion when a page opens ----------
+   Cards below the screen edge wait, then fade and rise in as they are scrolled to.
+   When a card appears its numbers count up from zero and its progress bars fill.
+   Runs once per visit to a page (not on every re-render), so ticking a habit never
+   makes the page flicker. */
+const Motion = {
+  io: null,
+  arm(view) {
+    this.io?.disconnect();
+    $$('.reveal-wait, .reveal-in', view).forEach((el) => el.classList.remove('reveal-wait', 'reveal-in'));
+    if (!view || matchMedia('(prefers-reduced-motion: reduce)').matches || !('IntersectionObserver' in window)) return;
+    this.io = new IntersectionObserver((entries) => entries.forEach((en) => {
+      if (!en.isIntersecting) return;
+      this.io.unobserve(en.target);
+      this.show(en.target);
+    }), { rootMargin: '0px 0px -6% 0px' });
+    const fold = window.innerHeight * 0.94;
+    $$('.card', view).filter((el) => !el.parentElement.closest('.card')).forEach((el) => {
+      const rect = el.getBoundingClientRect();
+      if (!rect.height) return; // hidden
+      if (rect.top < fold) { this.play(el); return; }
+      el.classList.add('reveal-wait');
+      this.io.observe(el);
+    });
+  },
+  show(el) {
+    el.classList.remove('reveal-wait');
+    el.classList.add('reveal-in');
+    el.addEventListener('animationend', () => el.classList.remove('reveal-in'), { once: true });
+    this.play(el);
+  },
+  /** Count the numbers up and fill the bars inside `el`. */
+  play(el) {
+    $$('.bar > span', el).forEach((bar) => {
+      const w = bar.style.width;
+      if (!parseFloat(w)) return;
+      bar.style.transition = 'none';
+      bar.style.width = '0%';
+      void bar.offsetWidth;
+      bar.style.transition = '';
+      bar.style.width = w;
+    });
+    // Numbers managed by animateNumber()
+    $$('[data-value]', el).forEach((n) => {
+      const to = Number(n.dataset.value);
+      if (!to) return;
+      n.dataset.value = 0;
+      n.textContent = 0;
+      animateNumber(n, to);
+    });
+    // Plain numbers written straight into the page (statistics tiles): "85", "7.5"
+    $$('.kpi .v:not(.text)', el).forEach((v) => {
+      const node = v.firstChild;
+      const text = node && node.nodeType === 3 ? node.nodeValue.trim() : '';
+      if (!/^\d+(\.\d+)?$/.test(text) || !Number(text)) return;
+      const to = Number(text), decimals = (text.split('.')[1] || '').length, start = performance.now();
+      const step = (now) => {
+        if (!node.isConnected) return; // the tile was re-rendered
+        const p = clamp((now - start) / 600, 0, 1);
+        node.nodeValue = (to * (1 - Math.pow(1 - p, 3))).toFixed(decimals);
+        if (p < 1) requestAnimationFrame(step); else node.nodeValue = text;
+      };
+      requestAnimationFrame(step);
+    });
+  },
+};
+
 let lastView = null;
 
 function route() {
@@ -1326,6 +1393,7 @@ function route() {
     renderHeader();
     renderView();
     window.scrollTo({ top: 0 });
+    Motion.arm($(`.view[data-view="${UI.view}"]`));
   };
   const from = lastView;
   lastView = next;
@@ -2884,7 +2952,9 @@ function submitRecordForm(e) {
 function recordEntry(dateKey, habitId, entry) {
   const beforeStreak = Stats.streaks().current;
   const beforeRate = Stats.day(fromKey(dateKey)).rate;
+  const wasDone = Store.getStatus(dateKey, habitId) === 'done';
   Store.setEntry(dateKey, habitId, entry);
+  if (!wasDone && Store.getStatus(dateKey, habitId) === 'done') celebrateDone(Store.getHabit(habitId));
   const afterStreak = Stats.streaks().current;
   const after = Stats.day(fromKey(dateKey));
   if (afterStreak > beforeStreak) {
@@ -2894,6 +2964,25 @@ function recordEntry(dateKey, habitId, entry) {
   } else if (dateKey === todayKey() && after.rate === 1 && beforeRate !== 1 && after.done > 0) {
     toast(t('allDoneToday'), 'award');
   }
+  if (dateKey === todayKey() && after.rate === 1 && beforeRate !== 1 && after.done > 0) celebrateAllDone();
+}
+
+/* ---------- Small celebrations (celebrate.js) ---------- */
+let party = null;
+let lastTap = null; // centre of the control pressed most recently: where a burst starts
+
+/** A habit just reached "done": a ring and a few dots from the button that was pressed. */
+function celebrateDone(habit) {
+  if (!party || !lastTap || performance.now() - lastTap.at > 1500) return;
+  party.burst(lastTap.x, lastTap.y, [habit?.color || cssVar('--accent'), cssVar('--glow-1'), '#ffffff']);
+  navigator.vibrate?.(12);
+}
+
+/** Everything planned for today is done: one short, light shower of confetti. */
+function celebrateAllDone() {
+  if (!party) return;
+  party.confetti([cssVar('--glow-1'), cssVar('--glow-2'), cssVar('--glow-3'), '#4cecc0', cssVar('--accent')]);
+  navigator.vibrate?.([14, 50, 22]);
 }
 
 /** Run a store mutation without the global re-render (the caller renders selectively). */
@@ -3018,6 +3107,14 @@ const actions = {
 };
 
 function bindEvents() {
+  // Remember where the last press landed (capture phase: before any handler re-renders the control)
+  document.addEventListener('click', (e) => {
+    const el = e.target instanceof Element ? e.target.closest('[data-action], button') : null;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    lastTap = r.width ? { x: r.left + r.width / 2, y: r.top + r.height / 2, at: performance.now() } : null;
+  }, true);
+
   document.addEventListener('click', (e) => {
     const el = e.target.closest('[data-action]');
     if (!el || el.tagName === 'INPUT') return;
@@ -3323,6 +3420,8 @@ async function boot() {
   if (typeof createClickSpark === 'function') createClickSpark({ sparkColor: () => cssVar('--spark') || '#fff', sparkSize: 10, sparkRadius: 15, sparkCount: 8, duration: 400 });
   // Gooey particle burst on the dock and segmented tabs (gooeynav.js); colours live in style.css
   if (typeof createGooeyNav === 'function') createGooeyNav({ selector: '.dock-item, .segmented button', particleCount: 15, particleDistances: [90, 10], particleR: 100, animationTime: 600, timeVariance: 300, colors: [1, 2, 3, 1, 2, 3, 1, 4] });
+  // A ring of dots when a habit is done, light confetti when the whole day is (celebrate.js)
+  if (typeof createCelebrate === 'function') party = createCelebrate();
   bindEvents();
   Cloud.init();
 

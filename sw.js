@@ -6,7 +6,7 @@
    On every deploy: change the version in CACHE below AND the ?v= on the
    style/script tags in index.html (they must match).
    ========================================================= */
-const CACHE = 'routa-v2.6.3';
+const CACHE = 'routa-v2.6.4';
 const SHELL = [
   './',
   './index.html',
@@ -19,6 +19,7 @@ const SHELL = [
   './borderglow.js',
   './dock.js',
   './gooeynav.js',
+  './celebrate.js',
   './config.js',
   './i18n.js',
   './manifest.webmanifest',
