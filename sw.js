@@ -1,12 +1,12 @@
 /* =========================================================
-   Cadence — service worker
-   Caches the app shell so Cadence opens instantly and works offline.
+   Routa — service worker
+   Caches the app shell so Routa opens instantly and works offline.
    Only same-origin GET requests are handled; Firebase calls always
    go to the network.
    On every deploy: change the version in CACHE below AND the ?v= on the
    style/script tags in index.html (they must match).
    ========================================================= */
-const CACHE = 'cadence-v2.5.8';
+const CACHE = 'routa-v2.6.0';
 const SHELL = [
   './',
   './index.html',
@@ -29,6 +29,7 @@ const SHELL = [
   './icons/icon.svg',
   './icons/icon-192.png',
   './icons/icon-512.png',
+  './icons/icon-maskable-512.png',
 ];
 
 // Fetch every file fresh from the server (bypassing the browser's HTTP cache), so one
@@ -44,7 +45,7 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k.startsWith('cadence-') && k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => /^(routa|cadence)-/.test(k) && k !== CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
   );
 });

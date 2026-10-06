@@ -1,5 +1,5 @@
 /* =========================================================
-   Cadence — Habit Tracker & Productivity Dashboard (v2)
+   Routa — Habit Tracker & Productivity Dashboard (v2)
    ---------------------------------------------------------
    Sections
      1. Config & utilities
@@ -22,7 +22,7 @@
 /* =========================================================
    1. Config & utilities
    ========================================================= */
-const CONFIG = window.CADENCE_CONFIG || {};
+const CONFIG = window.ROUTA_CONFIG || {};
 const cloudConfigured = () => Boolean(CONFIG.firebase && CONFIG.firebase.apiKey && CONFIG.firebase.projectId && window.firebase && typeof window.firebase.initializeApp === 'function');
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -324,10 +324,10 @@ const fmtAmount = (v, unit) => `${fmtValue(v)} ${unitLabel(unit)}`.trim();
 /**
  * Turn any supported shape (local record, v1 or v2 backup) into clean state.
  * Non-UUID ids (v1 data) are remapped to fresh UUIDs, and references follow.
- * Throws if the input doesn't look like Cadence data at all.
+ * Throws if the input doesn't look like Routa data at all.
  */
 function parseData(raw) {
-  if (!raw || typeof raw !== 'object' || !Array.isArray(raw.habits)) throw new Error('Not a Cadence backup');
+  if (!raw || typeof raw !== 'object' || !Array.isArray(raw.habits)) throw new Error('Not a Routa backup');
   const idMap = new Map();
   const mapId = (id) => {
     if (typeof id !== 'string' && typeof id !== 'number') return null;
@@ -394,6 +394,7 @@ function countLogs(logs) {
                            { data, outbox, cursors, lastSyncAt }
    Each record is written with a single setItem, so it's atomic.
    ========================================================= */
+// The keys keep the app's first name ("cadence") on purpose: renaming them would hide everyone's saved data
 const PREFS_KEY = 'cadence:v2:prefs';
 const NS_PREFIX = 'cadence:v2:ns:';
 const V1_KEY = 'cadence:data:v1';
@@ -1352,7 +1353,7 @@ function renderHeader() {
   $$('[data-bind="name"]').forEach((el) => { el.textContent = name || (Store.mode === 'cloud' ? account : t('you')); });
   $$('[data-bind="account"]').forEach((el) => { el.textContent = account; });
   $$('[data-bind="initials"]').forEach((el) => { el.textContent = initials(name || (Store.mode === 'cloud' ? account : t('you'))); });
-  document.title = `${cfg.title ? t(cfg.title) : t('navDashboard')} · Cadence`;
+  document.title = `${cfg.title ? t(cfg.title) : t('navDashboard')} · Routa`;
 }
 
 function renderView() {
@@ -2487,8 +2488,8 @@ function exportData() {
   const s = Store.state;
   const logs = [];
   Object.entries(s.logs).forEach(([date, day]) => Object.entries(day).forEach(([habitId, e]) => logs.push(typeof e === 'object' ? { habitId, date, value: e.v, target: e.t } : { habitId, date, status: e })));
-  const payload = { app: 'cadence', version: 2, exportedAt: nowIso(), profile: s.profile, habits: s.habits, goals: s.goals, logs };
-  download(`cadence-backup-${todayKey()}.json`, JSON.stringify(payload, null, 2));
+  const payload = { app: 'routa', version: 2, exportedAt: nowIso(), profile: s.profile, habits: s.habits, goals: s.goals, logs };
+  download(`routa-backup-${todayKey()}.json`, JSON.stringify(payload, null, 2));
   toast(t('backupDownloaded'), 'download');
 }
 
@@ -2981,7 +2982,7 @@ const actions = {
   },
   'download-corrupt': () => {
     if (!UI.corruptRaw) return;
-    download(`cadence-unreadable-data-${todayKey()}.json`, UI.corruptRaw);
+    download(`routa-unreadable-data-${todayKey()}.json`, UI.corruptRaw);
   },
 
   // Accounts

@@ -1,5 +1,5 @@
 /* =========================================================
-   Cadence — configuration
+   Routa — configuration
    ---------------------------------------------------------
    To enable accounts + sync across devices, paste your Firebase web
    app config below (Firebase Console → Project settings → General →
@@ -12,7 +12,7 @@
 
    Set `firebase: null` to run in "this device only" mode.
    ========================================================= */
-window.CADENCE_CONFIG = {
+window.ROUTA_CONFIG = {
   firebase: {
     apiKey: 'AIzaSyCJOS2Rt6yASF3tHMrfVezKGWE1Jx2r8v4',
     authDomain: 'cadence-b463f.firebaseapp.com',

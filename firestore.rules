@@ -1,7 +1,7 @@
 rules_version = '2';
 
 // =========================================================
-// Cadence — Firestore security rules
+// Routa — Firestore security rules
 // Publish in: Firebase Console → Firestore Database → Rules → paste → Publish
 //
 // Data layout (everything lives under the signed-in user's own document):

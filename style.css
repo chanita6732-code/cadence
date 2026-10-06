@@ -1,5 +1,5 @@
 /* =========================================================
-   Cadence — Habit Tracker
+   Routa — Habit Tracker
    Structure: font → tokens → base → layout → components → views → responsive
    Palette: violet → indigo → navy
    ========================================================= */
@@ -146,18 +146,12 @@ code { font-size: .92em; padding: 1px 5px; border-radius: 5px; background: var(-
 
 /* ---------- Brand ---------- */
 .brand-mark {
-  width: 28px; height: 28px; border-radius: 9px; flex-shrink: 0;
-  background: var(--grad);
-  position: relative;
+  width: 28px; height: 28px; border-radius: 7px; flex-shrink: 0;
+  background: url("icons/icon.svg?v=2.6.0") center / cover no-repeat;
   box-shadow: 0 6px 16px rgba(91, 69, 224, .35);
 }
-.brand-mark::after {
-  content: ""; position: absolute; inset: 8px;
-  border-radius: 50%; border: 2.5px solid #fff;
-  border-right-color: transparent;
-}
-.brand-mark.lg { width: 44px; height: 44px; border-radius: 13px; }
-.brand-mark.lg::after { inset: 12px; border-width: 3px; }
+.brand-mark.lg { width: 44px; height: 44px; border-radius: 11px; }
+.brand-name { font-weight: 700; letter-spacing: .01em; }
 
 /* ---------- Auth ---------- */
 .auth {

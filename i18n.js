@@ -1,5 +1,5 @@
 /* =========================================================
-   Cadence — translations (English / ไทย)
+   Routa — translations (English / ไทย)
    ---------------------------------------------------------
    Each key maps to a string. {name} placeholders are filled in by
    t(key, { name }) in script.js. Counted phrases use { one, other };
@@ -106,7 +106,7 @@ window.I18N = {
     resetLead: 'We\'ll email you a link to choose a new password.',
     sendResetLink: 'Send reset link',
     backToSignIn: 'Back to sign in',
-    notConfigured: 'Accounts aren\'t set up on this site yet, so you can only use Cadence on this device. The owner can enable accounts by following <code>README.md</code>.',
+    notConfigured: 'Accounts aren\'t set up on this site yet, so you can only use Routa on this device. The owner can enable accounts by following <code>README.md</code>.',
     continueGuest: 'Continue without an account',
     guestHint: 'Your data stays on this device. You can sign in later and bring it with you.',
     enterValidEmail: 'Enter a valid email address.',
@@ -424,8 +424,8 @@ window.I18N = {
     replaceMsgCloud: 'The backup has {habits}, {checkins} and {goals}. Your current data will be replaced on all your devices.',
     replaceBtn: 'Replace data',
     backupImported: 'Backup imported',
-    fileTooLarge: 'That file is too large to be a Cadence backup',
-    invalidBackup: 'That file isn\'t a valid Cadence backup',
+    fileTooLarge: 'That file is too large to be a Routa backup',
+    invalidBackup: 'That file isn\'t a valid Routa backup',
     clearAllTitle: 'Delete all habits & goals?',
     clearAllMsgCloud: 'Every habit, check-in and goal will be permanently removed from your account on all devices. Consider exporting a backup first.',
     clearAllMsgLocal: 'Every habit, check-in and goal will be permanently removed from this browser. Consider exporting a backup first.',
@@ -441,7 +441,7 @@ window.I18N = {
     notNow: 'Not now',
     merged: 'Your habits are now in your account',
     v1Title: 'Import data from the previous version?',
-    v1Msg: 'Found {habits} and {checkins} saved by an earlier version of Cadence in this browser. Note: early versions created example data automatically — only import if it\'s yours.',
+    v1Msg: 'Found {habits} and {checkins} saved by an earlier version of Routa in this browser. Note: early versions created example data automatically — only import if it\'s yours.',
     import: 'Import',
     dontImport: 'Don\'t import',
     v1Imported: 'Previous data imported',
@@ -464,7 +464,7 @@ window.I18N = {
     offlineToast: 'You\'re offline — changes are saved and will sync when you reconnect',
     profileSaved: 'Profile saved',
     prefsSaved: 'Preferences saved',
-    couldntStart: 'Cadence couldn\'t start. Try reloading the page.',
+    couldntStart: 'Routa couldn\'t start. Try reloading the page.',
 
     // Tracking types & daily targets
     trackingType: 'How to track',
@@ -625,7 +625,7 @@ window.I18N = {
     resetLead: 'เราจะส่งลิงก์สำหรับตั้งรหัสผ่านใหม่ไปที่อีเมลของคุณ',
     sendResetLink: 'ส่งลิงก์รีเซ็ต',
     backToSignIn: 'กลับไปหน้าเข้าสู่ระบบ',
-    notConfigured: 'เว็บนี้ยังไม่ได้เปิดระบบบัญชี จึงใช้ Cadence ได้เฉพาะในเครื่องนี้ เจ้าของเว็บเปิดระบบบัญชีได้ตามขั้นตอนใน <code>README.md</code>',
+    notConfigured: 'เว็บนี้ยังไม่ได้เปิดระบบบัญชี จึงใช้ Routa ได้เฉพาะในเครื่องนี้ เจ้าของเว็บเปิดระบบบัญชีได้ตามขั้นตอนใน <code>README.md</code>',
     continueGuest: 'ใช้งานโดยไม่สร้างบัญชี',
     guestHint: 'ข้อมูลจะอยู่ในเครื่องนี้เท่านั้น เข้าสู่ระบบทีหลังแล้วย้ายข้อมูลไปด้วยได้',
     enterValidEmail: 'กรอกอีเมลให้ถูกต้อง',
@@ -929,8 +929,8 @@ window.I18N = {
     replaceMsgCloud: 'ไฟล์สำรองมี {habits}, {checkins} และ {goals} ข้อมูลปัจจุบันจะถูกแทนที่ในทุกอุปกรณ์',
     replaceBtn: 'แทนที่ข้อมูล',
     backupImported: 'นำเข้าข้อมูลสำรองแล้ว',
-    fileTooLarge: 'ไฟล์ใหญ่เกินกว่าจะเป็นไฟล์สำรองของ Cadence',
-    invalidBackup: 'ไฟล์นี้ไม่ใช่ไฟล์สำรองของ Cadence',
+    fileTooLarge: 'ไฟล์ใหญ่เกินกว่าจะเป็นไฟล์สำรองของ Routa',
+    invalidBackup: 'ไฟล์นี้ไม่ใช่ไฟล์สำรองของ Routa',
     clearAllTitle: 'ลบนิสัยและเป้าหมายทั้งหมดไหม?',
     clearAllMsgCloud: 'นิสัย การเช็กอิน และเป้าหมายทั้งหมดจะถูกลบถาวรจากบัญชีของคุณในทุกอุปกรณ์ แนะนำให้ส่งออกข้อมูลสำรองก่อน',
     clearAllMsgLocal: 'นิสัย การเช็กอิน และเป้าหมายทั้งหมดจะถูกลบถาวรจากเบราว์เซอร์นี้ แนะนำให้ส่งออกข้อมูลสำรองก่อน',
@@ -945,7 +945,7 @@ window.I18N = {
     notNow: 'ไว้ทีหลัง',
     merged: 'ย้ายนิสัยเข้าบัญชีแล้ว',
     v1Title: 'นำเข้าข้อมูลจากเวอร์ชันก่อนไหม?',
-    v1Msg: 'พบ{habits} และ{checkins} ที่บันทึกโดย Cadence เวอร์ชันก่อนในเบราว์เซอร์นี้ หมายเหตุ: เวอร์ชันแรกสร้างข้อมูลตัวอย่างให้อัตโนมัติ นำเข้าเฉพาะเมื่อเป็นข้อมูลของคุณจริง ๆ',
+    v1Msg: 'พบ{habits} และ{checkins} ที่บันทึกโดย Routa เวอร์ชันก่อนในเบราว์เซอร์นี้ หมายเหตุ: เวอร์ชันแรกสร้างข้อมูลตัวอย่างให้อัตโนมัติ นำเข้าเฉพาะเมื่อเป็นข้อมูลของคุณจริง ๆ',
     import: 'นำเข้า',
     dontImport: 'ไม่นำเข้า',
     v1Imported: 'นำเข้าข้อมูลเดิมแล้ว',
@@ -967,7 +967,7 @@ window.I18N = {
     offlineToast: 'คุณออฟไลน์อยู่ การเปลี่ยนแปลงบันทึกไว้แล้ว และจะซิงก์เมื่อกลับมาออนไลน์',
     profileSaved: 'บันทึกโปรไฟล์แล้ว',
     prefsSaved: 'บันทึกการตั้งค่าแล้ว',
-    couldntStart: 'เปิด Cadence ไม่สำเร็จ ลองโหลดหน้าใหม่',
+    couldntStart: 'เปิด Routa ไม่สำเร็จ ลองโหลดหน้าใหม่',
 
     trackingType: 'วิธีติดตาม',
     typeBoolean: 'ทำ / ไม่ทำ',

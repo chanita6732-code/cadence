@@ -1,4 +1,4 @@
-# Cadence — Habit Tracker
+# Routa — Habit Tracker
 
 เว็บติดตามนิสัยประจำวัน ดู Streak สถิติ และตั้งเป้าหมาย รองรับการล็อกอิน (Google หรืออีเมล) และซิงก์ข้อมูลข้ามอุปกรณ์แบบเรียลไทม์ ใช้งานออฟไลน์ได้ และติดตั้งเป็นแอปบนมือถือได้ (PWA)
 
@@ -22,7 +22,7 @@
 ## 1. ตั้งค่า Firebase (ฟรี, แผน Spark ไม่ต้องใส่บัตรเครดิต)
 
 1. **สร้างโปรเจกต์:** ไปที่ <https://console.firebase.google.com> → **Create a project**
-   - ตั้งชื่อ เช่น `cadence`
+   - ตั้งชื่อ เช่น `routa`
    - Google Analytics ปิดได้
 2. **เปิดฐานข้อมูล:** เมนู **Build → Firestore Database → Create database**
    - Location เลือก `asia-southeast1 (Singapore)`
@@ -37,7 +37,7 @@
    - คัดลอกค่าใน `firebaseConfig` มาใส่ใน `config.js`:
 
    ```js
-   window.CADENCE_CONFIG = {
+   window.ROUTA_CONFIG = {
      firebase: {
        apiKey: 'AIza...',
        authDomain: 'cadence-xxxx.firebaseapp.com',
@@ -82,8 +82,8 @@ python3 -m http.server 8080   # แล้วเปิด http://localhost:8080
 
 ทุกครั้งที่ deploy เวอร์ชันใหม่ ให้เปลี่ยนเลขเวอร์ชัน **2 ที่ให้ตรงกัน**:
 
-1. `CACHE` ใน `sw.js` เช่น `cadence-v2.5.9`
-2. `?v=` ท้ายชื่อไฟล์ใน `index.html` (8 จุด: `style.css`, `i18n.js`, `shapegrid.js`, `clickspark.js`, `borderglow.js`, `dock.js`, `gooeynav.js`, `script.js`) เช่น `?v=2.5.9`
+1. `CACHE` ใน `sw.js` เช่น `routa-v2.6.1`
+2. `?v=` ท้ายชื่อไฟล์ใน `index.html` (8 จุด: `style.css`, `i18n.js`, `shapegrid.js`, `clickspark.js`, `borderglow.js`, `dock.js`, `gooeynav.js`, `script.js`) เช่น `?v=2.6.1`
 
 เลขนี้ทำให้เบราว์เซอร์โหลดไฟล์ชุดใหม่ทั้งชุดพร้อมกัน ไม่เอาหน้าเว็บใหม่ไปใช้กับไฟล์ CSS หรือ JavaScript ตัวเก่าที่เก็บไว้ ซึ่งจะทำให้หน้าเพี้ยน
 
@@ -198,7 +198,7 @@ vendor/                 Chart.js, Firebase SDK, ฟอนต์ Inter + Noto San
 ### สำหรับนักพัฒนา: ทดสอบกับ Firebase Emulator
 
 ```bash
-npx firebase-tools emulators:start --only auth,firestore --project demo-cadence
+npx firebase-tools emulators:start --only auth,firestore --project demo-routa
 ```
 
 แล้วเพิ่มใน `config.js` เพื่อชี้ไปที่ emulator (ห้ามใช้บนเว็บจริง):
